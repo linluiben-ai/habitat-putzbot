@@ -19,7 +19,7 @@ jobs:
           python-version: '3.9'
 
       - name: Bibliotheken installieren
-        run: pip install requests slack-sdk
+        run: pip install -r requirements.txt
 
       - name: Skript ausführen
         env:
