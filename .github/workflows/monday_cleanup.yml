@@ -1,0 +1,31 @@
+name: Putzplan Automation
+
+on:
+  schedule:
+    # Cron Syntax: Minute Stunde Tag Monat Wochentag
+    - cron: '0 8 * * 1'
+  workflow_dispatch: # Erlaubt manuelles Starten zum Testen
+
+jobs:
+  run-putzbot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v3
+
+      - name: Python aufsetzen
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installieren
+        run: pip install requests slack-sdk
+
+      - name: Skript ausführen
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          DS_A_ID: ${{ secrets.DS_A_ID }}
+          DS_B_ID: ${{ secrets.DS_B_ID }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: python main.py
