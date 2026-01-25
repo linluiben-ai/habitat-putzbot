@@ -1,0 +1,17 @@
+# Virtuelle Umgebung ignorieren
+venv/
+.venv/
+env/
+
+# PyCharm Settings ignorieren
+.idea/
+
+# Python Cache ignorieren
+__pycache__/
+*.pyc
+
+# Environment Variablen
+.env
+
+# Tests ignorieren
+test.py
