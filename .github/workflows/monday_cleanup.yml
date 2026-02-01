@@ -3,7 +3,7 @@ name: Putzplan Automation
 on:
   schedule:
     # Cron Syntax: Minute Stunde Tag Monat Wochentag
-    - cron: '0 19 * * 1'
+    - cron: '0 8 * * 1'
   workflow_dispatch: # Erlaubt manuelles Starten zum Testen
 
 jobs:
