@@ -12,7 +12,8 @@ SLACK_TOKEN = os.environ.get("SLACK_TOKEN")
 DS_A_ID = os.environ.get("DS_A_ID") # Mitglieder
 DS_B_ID = os.environ.get("DS_B_ID") # Putzliste
 SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
-EMAIL_DOMAIN = os.environ.get("EMAIL_DOMAIN")
+TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
+EMAIL_DOMAIN = "das-habitat.de"
 
 # Notion API Header
 HEADERS = {
@@ -22,6 +23,7 @@ HEADERS = {
 }
 
 slack = WebClient(token=SLACK_TOKEN)
+
 
 
 def clean_string(text):
@@ -41,10 +43,126 @@ def get_slack_user_id(email):
         return None
 
 
-def main():
-    print("🤖 Starte Putzplan-Lotterie (Direct API Call)...")
+def get_current_week_status(ds_id, headers):
+    current_kw = datetime.now().isocalendar()[1]
 
-    # 1. Notion: Mitglieder abfragen
+    print(f"🔎 Prüfe Status für KW {current_kw}...")
+
+    # WICHTIG: Standard API nutzt 'databases', nicht 'data_sources' im Pfad für Queries
+    query_url = f"https://api.notion.com/v1/data_sources/{ds_id}/query"
+    payload = {
+        "filter": {
+            "property": "Kalenderwoche",
+            "number": {
+                "equals": current_kw
+            }
+        }
+    }
+
+    response = requests.post(query_url, json=payload, headers=headers)
+    if response.status_code != 200:
+        print(f"⚠️ Fehler beim Checken der Woche: {response.text}")
+        return {"page_status": "error", "kw": current_kw}
+
+    data = response.json()
+    results = data.get("results", [])
+
+    if not results:
+        return {"page_status": "empty", "kw": current_kw, "page_id": None, "existing_count": 0, "existing_ids": []}
+
+    page = results[0]
+    page_id = page["id"]
+    props = page["properties"]
+
+    # Rollup oder Relation zählen
+    try:
+        # Versuch via Rollup
+        rollup_prop = props.get("Anzahl Mitglieder", {}).get("rollup", {})
+        existing_count = rollup_prop.get("number", 0)
+    except Exception:
+        existing_count = 0
+
+    # Fallback: Manuell zählen, wenn Rollup 0 oder Fehler, aber Relation da ist
+    existing_rels = props.get("Mitglieder", {}).get("relation", [])
+    if existing_count == 0 and existing_rels:
+        existing_count = len(existing_rels)
+
+    existing_ids = [rel["id"] for rel in existing_rels]
+
+    return {
+        "page_status": "exists",
+        "kw": current_kw,
+        "page_id": page_id,
+        "existing_count": existing_count,
+        "existing_ids": existing_ids
+    }
+
+
+# Seite updaten
+def update_existing_page(page_id, all_ids_combined, headers):
+    update_url = f"https://api.notion.com/v1/pages/{page_id}"
+
+    payload = {
+        "properties": {
+            "Mitglieder": {
+                "relation": [{"id": mid} for mid in all_ids_combined]
+            }
+        }
+    }
+
+    res = requests.patch(update_url, json=payload, headers=headers)
+    if res.status_code == 200:
+        print(f"✅ Seite {page_id} erfolgreich geupdated (Jetzt {len(all_ids_combined)} Mitglieder).")
+    else:
+        print(f"❌ Fehler beim Update: {res.text}")
+
+def create_page_from_template(ds_id, template_id, title, member_ids, kw, headers):
+    url = "https://api.notion.com/v1/pages"
+
+    payload = {
+        "parent": {"data_source_id": ds_id},
+        "template": {
+            "type": "template_id",
+            "template_id": template_id
+        },
+        # Diese Properties überschreiben die Werte im Template:
+        "properties": {
+            "Titel": {"title": [{"text": {"content": title}}]},
+            "Mitglieder": {"relation": [{"id": uid} for uid in member_ids]},
+            "Kalenderwoche": {"number": kw}
+        }
+    }
+
+    # Hinweis: 'children' darf NICHT im payload sein, wenn 'template' genutzt wird!
+
+    res = requests.post(url, json=payload, headers=headers)
+
+    if res.status_code == 200:
+        print(f"✅ Seite '{title}' erfolgreich aus Template erstellt.")
+        return res.json()["id"]
+    else:
+        print(f"❌ Template-Fehler: {res.text}")
+        return None
+
+def main():
+    print("🤖 Starte Putzplan-Lotterie V2")
+
+    # 1. Überprüfen, ob es schon eine Seite für diese Woche gibt
+    kw_status = get_current_week_status(DS_B_ID, HEADERS)
+    if kw_status.get("page_status") == "error":
+        return
+
+    current_kw = kw_status["kw"]
+    existing_count = kw_status["existing_count"]
+    existing_ids = kw_status["existing_ids"]
+
+    #Ziel: 4 Leute
+    needed = 4 - existing_count
+    print(f"📅 KW {current_kw}: Bereits {existing_count} Mitglieder. Benötige noch {needed}.")
+
+    # 2. Kandidaten laden (nur nötig, wenn wir losen müssen ODER um Namen für Slack aufzulösen)
+    # Wir laden sie immer, damit wir die Namen für die Slack Nachricht haben.
+
     url = f"https://api.notion.com/v1/data_sources/{DS_A_ID}/query"
     payload = {
         "filter": {
@@ -107,96 +225,138 @@ def main():
 
     response = requests.post(url, json=payload, headers=HEADERS)
     if response.status_code != 200:
-        print(f"❌ Notion API Fehler: {response.text}")
+        print(f"❌ Notion API Fehler (Mitglieder): {response.text}")
         return
 
     data = response.json()
-    candidates = []
+    all_members_data = data.get("results", [])
+    candidates_pool = []
+    member_lookup = {}
 
-    for member in data.get("results", []):
-        icon = member["icon"]
-        if icon and icon["type"] == "emoji":
-            emoji = icon["emoji"]
-        else:
-            emoji = None
-        not_in_question = not (emoji == "❓")
-
+    for member in all_members_data:
+        m_id = member["id"]
         props = member["properties"]
 
-        # Check: Hat die Person schon mal geputzt? (Relation in DB A)
-        # Wir prüfen, ob die Liste der Relationen leer ist
-        putz_relation = props.get("Putzplan", {}).get("relation", [])
+        # Name parsen
+        title_prop = next((v for k, v in props.items() if v["type"] == "title"), None)
+        if not title_prop or not title_prop["title"]:
+            continue
+        full_name = title_prop["title"][0]["text"]["content"]
 
-        if not_in_question:
-            if not putz_relation:
-                try:
-                    # Titel-Property finden
-                    title_prop = next((v for k, v in props.items() if v["type"] == "title"), None)
-                    if not title_prop or not title_prop["title"]:
-                        continue
+        # E-Mail Logik (Interne Email bevorzugen)
+        email = None
+        email_prop = props.get("Interne Email", {})
+        if email_prop.get("email"):
+            email = email_prop["email"]
+        else:
+            # Fallback generieren
+            if ',' in full_name:
+                parts = full_name.split(',')
+                n = clean_string(parts[0].strip())
+                v = clean_string(parts[1].strip())
+                email = f"{v}.{n}@{EMAIL_DOMAIN}"
 
-                    full_name_raw = title_prop["title"][0]["text"]["content"]
+        # In Lookup speichern (für Slack später)
+        member_obj = {"id": m_id, "name": full_name, "email": email}
+        member_lookup[m_id] = member_obj
 
-                    if ',' in full_name_raw:
-                        parts = full_name_raw.split(',')
-                        nachname = clean_string(parts[0].strip())
-                        vorname = clean_string(parts[1].strip())
-                        email = f"{vorname}.{nachname}@{EMAIL_DOMAIN}"
+        # Prüfen ob Kandidat für Losung:
+        # 1. Kein "❓" Emoji
+        icon = member.get("icon", {})
+        is_questionable = (icon and icon.get("type") == "emoji" and icon.get("emoji") == "❓")
 
-                        candidates.append({
-                            "id": member["id"],
-                            "name": full_name_raw,
-                            "email": email
-                        })
-                except Exception as e:
-                    print(f"⚠️ Fehler beim Parsen von {member['id']}: {e}")
+        # 2. Hat noch nicht geputzt (Relation leer)
+        putz_rel = props.get("Putzplan", {}).get("relation", [])
+        has_cleaned = len(putz_rel) > 0 #HIER STELLSCHRAUBE FÜR MEHRERE ZYKLEN!
 
-    print(f"✅ {len(candidates)} Mitglieder im Lostopf.")
+        # 3. Ist NICHT schon diese Woche eingetragen (ganz wichtig beim Nachlosen!) - ist das nicht redundant, da bei diesen ja schon has_cleaned True ist
+        is_already_in_week = m_id in existing_ids
 
-    if not candidates:
+        if not is_questionable and not has_cleaned and not is_already_in_week:
+            candidates_pool.append(member_obj)
+
+    print(f"📊 {len(candidates_pool)} qualifizierte Kandidaten im Lostopf.")
+
+    if not candidates_pool:
         print("❌ Keine Kandidaten gefunden.")
         return
-    else:
-        for c in candidates:
-            print(c["name"])
-            print(c["email"])
-            print("------------------")
 
-    # 2. Zufällige Auswahl
-    selected = random.sample(candidates, min(len(candidates), 4))
 
-    # 3. Neue Seite in DB B erstellen
-    kw = datetime.now().isocalendar()[1] + 1
-    create_url = "https://api.notion.com/v1/pages"
+    # 3. Entscheidung & Aktion
+    selected_new = []
 
-    new_page_data = {
-        "parent": {"data_source_id": DS_B_ID},
-        "properties": {
-            "Woche": {"title": [{"text": {"content": f"Putzcrew KW {kw}"}}]},
-            "Test": {"relation": [{"id": p["id"]} for p in selected]}
-        }
-    }
-
-    res_create = requests.post(create_url, json=new_page_data, headers=HEADERS)
-    if res_create.status_code == 200:
-        print(f"📝 Notion Seite für KW {kw} erstellt.")
-    else:
-        print(f"❌ Fehler beim Erstellen der Seite: {res_create.text}")
-        return
-
-    # 4. Slack Nachricht
-    slack_tags = []
-    for person in selected:
-        s_id = get_slack_user_id(person["email"])
-        if s_id:
-            slack_tags.append(f"<@{s_id}>")
+    if needed > 0:
+        # CASE A: Wir müssen auffüllen
+        draw_count = min(len(candidates_pool), needed)
+        if len(candidates_pool) >= needed:
+            selected_new = random.sample(candidates_pool, draw_count)
+            print(f"🎲 {len(selected_new)} neue Mitglieder ausgelost.")
+        elif draw_count > 0:
+            selected_new = random.sample(candidates_pool, draw_count)
+            print(f"🎲 {len(selected_new)} neue Mitglieder ausgelost. Es waren jedoch {needed} benötigt, also nicht genügend Kandidaten im Lostopf.")
         else:
-            # Fallback auf Vorname
-            name_part = person["name"].split(',')[-1].strip()
-            slack_tags.append(name_part)
+            print("⚠️ Warnung: Keine Kandidaten im Pool!")
 
-    msg = f"🧹 *Putzplan KW {kw} ist da!* 🧹\n\nDiese Woche sind dran: {', '.join(slack_tags)}"
+        # IDs zusammenführen (Bestehende + Neue)
+        all_ids_final = existing_ids + [p["id"] for p in selected_new]
 
+        if kw_status["page_status"] == "exists":
+            # Seite bearbeiten
+            update_existing_page(kw_status["page_id"], all_ids_final, HEADERS)
+        else:
+            # Neue Seite aus Template
+            create_page_from_template(
+                DS_B_ID,
+                TEMPLATE_ID,
+                f"Putzcrew KW {current_kw}",
+                all_ids_final,
+                current_kw,
+                HEADERS
+            )
+    else:
+        # CASE B: Schon genug Mitglieder
+        print("✅ Crew ist bereits vollzählig. Kein Losen nötig.")
+        #all_ids_final auf die bestehenden setzen, für Slack.
+        all_ids_final = existing_ids
+
+    # 4. Slack Nachricht generieren
+
+    # Helper um Slack Tag zu holen
+    def get_tag(uid):
+        # Daten aus Lookup holen
+        mem = member_lookup.get(uid)
+        if not mem: return "Unbekannt"
+
+        sid = get_slack_user_id(mem["email"])
+        if sid:
+            return f"<@{sid}>"
+        else:
+            # Fallback Name
+            return mem["name"].split(',')[-1].strip()
+
+    # Listen für Nachricht
+    tags_existing = [get_tag(uid) for uid in existing_ids]
+    tags_new = [get_tag(p["id"]) for p in selected_new]
+
+    msg = f"🧹 *Der Putzplan für diese Woche ist da:* 🧹\n\n"
+
+    if needed <= 0 and not selected_new:
+        # Alles war schon voll (Freiwillige)
+        msg += (f"Diese Woche sind wir schon komplett! Ein riesiges Dankeschön an die Freiwilligen:\n"
+               f"{', '.join(tags_existing)} 💚")
+    else:
+        # Wir haben gelost (gemischt oder komplett neu)
+        if tags_existing:
+            msg += f"Danke fürs freiwillige Eintragen: {', '.join(tags_existing)} 🙏\n"
+        if needed == 4:
+            if tags_new:
+                msg += f"Dazu wurden vom Bot ausgelost: {', '.join(tags_new)} 🎲\n"
+        else:
+            if tags_new:
+                msg += f"Zusätzlich wurden vom Bot ausgelost: {', '.join(tags_new)} 🎲\n"
+
+
+    # Nachricht senden
     try:
         slack.chat_postMessage(channel=SLACK_CHANNEL_ID, text=msg)
         print("📨 Slack Nachricht gesendet.")
