@@ -28,4 +28,5 @@ jobs:
           DS_A_ID: ${{ secrets.DS_A_ID }}
           DS_B_ID: ${{ secrets.DS_B_ID }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
         run: python main.py
