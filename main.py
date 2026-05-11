@@ -14,6 +14,7 @@ DS_B_ID = os.environ.get("DS_B_ID") # Putzliste
 SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
 TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
 EMAIL_DOMAIN = "das-habitat.de"
+DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 
 # Notion API Header
 HEADERS = {
@@ -72,6 +73,7 @@ def get_current_week_status(ds_id, headers):
 
     page = results[0]
     page_id = page["id"]
+    page_url = page["url"]
     props = page["properties"]
 
     # Rollup oder Relation zählen
@@ -93,6 +95,7 @@ def get_current_week_status(ds_id, headers):
         "page_status": "exists",
         "kw": current_kw,
         "page_id": page_id,
+        "page_url": page_url,
         "existing_count": existing_count,
         "existing_ids": existing_ids
     }
@@ -139,10 +142,11 @@ def create_page_from_template(ds_id, template_id, title, member_ids, kw, headers
 
     if res.status_code == 200:
         print(f"✅ Seite '{title}' erfolgreich aus Template erstellt.")
-        return res.json()["id"]
+        data = res.json()
+        return data["id"], data["url"]
     else:
         print(f"❌ Template-Fehler: {res.text}")
-        return None
+        return None, None
 
 def main():
     print("🤖 Starte Putzplan-Lotterie V2")
@@ -280,10 +284,16 @@ def main():
     if not candidates_pool:
         print("❌ Keine Kandidaten gefunden.")
         return
+    if DRY_RUN:
+        print("\n🧪 DRY RUN: Nur Kandidatenliste, keine Änderungen in Notion oder Slack.\n")
+        for i, person in enumerate(sorted(candidates_pool, key=lambda x: x["name"]), start=1):
+            print(f"{i:02d}. {person['name']} | {person['email'] or 'keine E-Mail'}")
+        return
 
 
     # 3. Entscheidung & Aktion
     selected_new = []
+    current_page_url = kw_status.get("page_url")
 
     if needed > 0:
         # CASE A: Wir müssen auffüllen
@@ -305,7 +315,7 @@ def main():
             update_existing_page(kw_status["page_id"], all_ids_final, HEADERS)
         else:
             # Neue Seite aus Template
-            create_page_from_template(
+            new_id, new_url = create_page_from_template(
                 DS_B_ID,
                 TEMPLATE_ID,
                 f"Putzcrew KW {current_kw}",
@@ -313,11 +323,11 @@ def main():
                 current_kw,
                 HEADERS
             )
+            if new_url:
+                current_page_url = new_url
     else:
         # CASE B: Schon genug Mitglieder
         print("✅ Crew ist bereits vollzählig. Kein Losen nötig.")
-        #all_ids_final auf die bestehenden setzen, für Slack.
-        all_ids_final = existing_ids
 
     # 4. Slack Nachricht generieren
 
@@ -354,7 +364,12 @@ def main():
         else:
             if tags_new:
                 msg += f"Zusätzlich wurden vom Bot ausgelost: {', '.join(tags_new)} 🎲\n"
-
+    # Link
+    if current_page_url:
+        # Slack Syntax: <URL|Text>
+        msg += f"\n👉 <{current_page_url}|Hier geht's zur Seite in Notion>"
+    else:
+        print("⚠️ Warnung: Konnte keinen Link zur Notion-Seite generieren.")
 
     # Nachricht senden
     try:
