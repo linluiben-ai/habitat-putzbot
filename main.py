@@ -230,13 +230,27 @@ def main():
         }
     }
 
-    response = requests.post(url, json=payload, headers=HEADERS)
-    if response.status_code != 200:
-        print(f"❌ Notion API Fehler (Mitglieder): {response.text}")
-        return
+    all_members_data = []
+    start_cursor = None
 
-    data = response.json()
-    all_members_data = data.get("results", [])
+    while True:
+        paged_payload = dict(payload)
+        if start_cursor:
+            paged_payload["start_cursor"] = start_cursor
+
+        response = requests.post(url, json=paged_payload, headers=HEADERS)
+        if response.status_code != 200:
+            print(f"❌ Notion API Fehler (Mitglieder): {response.text}")
+            return
+
+        data = response.json()
+        all_members_data.extend(data.get("results", []))
+
+        if data.get("has_more"):
+            start_cursor = data.get("next_cursor")
+        else:
+            break
+
     candidates_pool = []
     member_lookup = {}
 
