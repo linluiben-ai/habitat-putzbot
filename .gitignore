@@ -14,4 +14,5 @@ __pycache__/
 .env
 
 # Tests ignorieren
-test.py
+test_pm.py
+test_lostopf.py

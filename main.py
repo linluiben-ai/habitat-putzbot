@@ -81,6 +81,8 @@ def get_current_week_status(ds_id, headers):
         # Versuch via Rollup
         rollup_prop = props.get("Anzahl Mitglieder", {}).get("rollup", {})
         existing_count = rollup_prop.get("number", 0)
+        if DRY_RUN:
+            print("Found rollup.")
     except Exception:
         existing_count = 0
 
@@ -88,6 +90,8 @@ def get_current_week_status(ds_id, headers):
     existing_rels = props.get("Mitglieder", {}).get("relation", [])
     if existing_count == 0 and existing_rels:
         existing_count = len(existing_rels)
+        if DRY_RUN:
+            print("Counted relations.")
 
     existing_ids = [rel["id"] for rel in existing_rels]
 
@@ -164,8 +168,7 @@ def main():
     needed = 4 - existing_count
     print(f"📅 KW {current_kw}: Bereits {existing_count} Mitglieder. Benötige noch {needed}.")
 
-    # 2. Kandidaten laden (nur nötig, wenn wir losen müssen ODER um Namen für Slack aufzulösen)
-    # Wir laden sie immer, damit wir die Namen für die Slack Nachricht haben.
+    # 2. Kandidaten laden (zum losen oder um Namen für Slack aufzulösen)
 
     url = f"https://api.notion.com/v1/data_sources/{DS_A_ID}/query"
     payload = {
@@ -279,7 +282,7 @@ def main():
         if not is_questionable and not has_cleaned and not is_already_in_week:
             candidates_pool.append(member_obj)
 
-    print(f"📊 {len(candidates_pool)} qualifizierte Kandidaten im Lostopf.")
+    print(f"📊 {len(candidates_pool)} qualifizierte Kandidaten im Pool.")
 
     if not candidates_pool:
         print("❌ Keine Kandidaten gefunden.")
@@ -303,7 +306,7 @@ def main():
             print(f"🎲 {len(selected_new)} neue Mitglieder ausgelost.")
         elif draw_count > 0:
             selected_new = random.sample(candidates_pool, draw_count)
-            print(f"🎲 {len(selected_new)} neue Mitglieder ausgelost. Es waren jedoch {needed} benötigt, also nicht genügend Kandidaten im Lostopf.")
+            print(f"🎲 {len(selected_new)} neue Mitglieder ausgelost. Es waren jedoch {needed} benötigt, also nicht genügend Kandidaten im Pool.")
         else:
             print("⚠️ Warnung: Keine Kandidaten im Pool!")
 
