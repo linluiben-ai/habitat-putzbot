@@ -288,7 +288,7 @@ def main():
 
         # 2. Hat noch nicht geputzt (Relation leer)
         putz_rel = props.get("Putzplan", {}).get("relation", [])
-        has_cleaned = len(putz_rel) > 0 #HIER STELLSCHRAUBE FÜR MEHRERE ZYKLEN!
+        has_cleaned = len(putz_rel) > 1 #HIER STELLSCHRAUBE FÜR MEHRERE ZYKLEN!
 
         # 3. Ist NICHT schon diese Woche eingetragen (ganz wichtig beim Nachlosen!) - ist das nicht redundant, da bei diesen ja schon has_cleaned True ist
         is_already_in_week = m_id in existing_ids
