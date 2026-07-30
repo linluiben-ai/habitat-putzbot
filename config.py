@@ -28,6 +28,15 @@ def _load_dotenv():
 
 _load_dotenv()
 
+# Ausgabe enthält durchgehend Emoji und Umlaute. Windows-Konsolen laufen je
+# nach Shell auf cp1252 und werfen dann UnicodeEncodeError mitten im Lauf.
+# Beide Einstiegspunkte importieren config zuerst, deshalb steht das hier.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass  # z.B. umgeleitete Streams ohne reconfigure
+
 # --- Env ---
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 SLACK_TOKEN = os.environ.get("SLACK_TOKEN")
