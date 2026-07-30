@@ -10,20 +10,16 @@ Der Bot verschickt DMs an einzelne Mitglieder und postet in einen Kanal. Beides 
 
 ## Schritt 1: Slack-App im Sandbox-Workspace anlegen
 
-1. Auf [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From scratch*.
-2. Name z.B. „Putzbot (Sandbox)", als Workspace den Sandbox-Workspace wählen.
-3. **OAuth & Permissions** → *Bot Token Scopes* hinzufügen:
+Per **App-Manifest**, nicht Klick für Klick:
 
-   | Scope | wofür |
-   |---|---|
-   | `chat:write` | Nachrichten in Kanal und DMs |
-   | `im:write` | DM-Konversation öffnen |
-   | `users:read` | User-Liste |
-   | `users:read.email` | E-Mail → Slack-User-ID (Kernstück des Mitglieder-Mappings) |
-   | `reactions:read` | erst ab Phase 5/6 (✅/❌-Reaktionen), schadet aber nicht |
+1. Auf [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From an app manifest*.
+2. Sandbox-Workspace wählen, dann den Inhalt von [slack-app-manifest.yml](slack-app-manifest.yml) reinkopieren.
+3. **Install to Workspace** → das **Bot User OAuth Token** (`xoxb-…`) kopieren. Das ist der `SLACK_TOKEN` für die Sandbox.
+4. Im Sandbox-Workspace einen Kanal anlegen (z.B. `#putzbot-test`), den Bot per `/invite @Putzbot` hinzufügen, und die Kanal-ID notieren (Kanal → Details → ganz unten).
 
-4. **Install to Workspace** → das **Bot User OAuth Token** (`xoxb-…`) kopieren. Das ist der `SLACK_TOKEN` für die Sandbox.
-5. Im Sandbox-Workspace einen Kanal anlegen (z.B. `#putzbot-test`), den Bot per `/invite @Putzbot (Sandbox)` hinzufügen, und die Kanal-ID notieren (Kanal → Details → ganz unten).
+Die Scopes stehen alle im Manifest, inklusive derer für Phase 5/6 (`reactions:read`, `im:history`) — die schaden jetzt nicht und ersparen später eine Neuinstallation der App.
+
+**Slack CLI lohnt sich hier nicht.** Die ist auf Deno-basierte Workflow-Apps ausgelegt; für einen klassischen Bot mit Token käme man über Umwege zum selben Ergebnis. Das Manifest bringt den eigentlichen Vorteil (reproduzierbar, alle Scopes auf einmal) ganz ohne Installation.
 
 ## Schritt 2: Das E-Mail-Problem
 
@@ -39,32 +35,64 @@ So lässt sich der komplette Ablauf mit echten Notion-Daten testen, ohne dass je
 
 ## Schritt 3: Notion
 
-Zwei Möglichkeiten:
+Wichtig vorweg: **der Bot schreibt ausschließlich in die Putzplan-DB.** Die Mitgliederliste wird nur gelesen. Eine Kopie der Mitgliederliste braucht es zum Testen also gar nicht — nur eine Kopie des Putzplans.
 
-- **Nur lesen (empfohlen für den Anfang):** echte Notion-IDs verwenden, aber immer mit `DRY_RUN=true`. Es wird nichts geschrieben, du siehst aber die echte Auslosung mit echten Mitgliedern.
-- **Auch schreiben:** Putzplan- und Mitglieder-Datenbank in einen Testbereich duplizieren, die Integration dort freigeben und `DS_A_ID`/`DS_B_ID`/`TEMPLATE_ID` auf die Kopien zeigen lassen. Nur so lassen sich Seitenerstellung und Status-Updates wirklich prüfen.
+Zwei Stufen:
 
-⚠️ Beim Duplizieren einer Notion-Datenbank werden Relationen **nicht** automatisch auf die Kopie umgebogen — nach dem Duplizieren prüfen, ob `Mitglieder` und `Putzplan` wirklich auf die jeweils andere Kopie zeigen und nicht noch auf das Original.
+- **Nur lesen (empfohlen für den Anfang):** echte Notion-IDs, aber `DRY_RUN=true`. Die Auslosung läuft mit echten Mitgliedern und echter Historie durch, es wird nur nichts geschrieben. Realistischstes Bild der Fairness-Logik bei null Risiko.
+- **Auch schreiben:** nur die **Putzplan**-DB duplizieren, die Integration darauf freigeben, und `USE_TEST_DATA=true` mit `TEST_DS_B_ID` + `TEST_TEMPLATE_ID` setzen. `TEST_DS_A_ID` kann leer bleiben — dann wird die echte Mitgliederliste gelesen.
 
-## Schritt 4: Lokal ausführen
+⚠️ **Fallstrick Rückrelation:** Setzt der Bot auf einer Putzplan-Seite die `Mitglieder`-Relation, trägt Notion das automatisch auch auf der Mitglieder-Seite ein. Zeigt die Relation der Putzplan-Kopie auf die **echte** Mitgliederliste, landen Testeinträge also in echten Mitgliederprofilen. Deshalb in der Kopie die Relation auf **einseitig** stellen („Show on Mitgliederliste" aus), bevor der erste Schreiblauf startet.
 
-Env-Variablen in der Shell setzen (PowerShell):
+⚠️ Nebenwirkung davon: Ohne Rückrelation sieht der Bot bei den Testläufen keine Putzhistorie — alle wirken wie „noch nie geputzt". Zum Prüfen von Seitenerstellung und Status-Updates reicht das; die Fairness-Logik testest du besser mit `DRY_RUN` gegen die echten Daten.
+
+Die vorhandene Kopie „Mitgliederliste (Testdatenbank, inoffiziell!)" stammt aus der Zeit vor `Putzstatus`, `Putzplan` und `Interne Email` — ohne diese drei Properties läuft der Bot dagegen nicht. Entweder nachrüsten oder (einfacher) ignorieren.
+
+## Schritt 4: Die Betriebsmodi
+
+Vier unabhängige Schalter, beliebig kombinierbar:
+
+| Schalter | Was er tut | Was er **nicht** tut |
+|---|---|---|
+| `DRY_RUN=true` | Lässt den kompletten Ablauf laufen: Wochen-Lookup, Kandidatenpool, Auslosung, fertig formatierte Nachrichtentexte. Jeder Schreibzugriff wird stattdessen als `[DRY RUN] würde …` ausgegeben. | Ändert nichts in Notion, verschickt nichts in Slack. |
+| `DEBUG=true` | Zusätzliche Diagnosezeilen: wie viele Seiten je Query geladen wurden, wie groß der Kandidatenpool auf **jeder** Fallback-Stufe ist, welche Stufe am Ende gezogen hat, warum eine Seite ignoriert wurde. | Ändert am Verhalten nichts — reine Ausgabe. |
+| `FORCE_PLAN=true` | Erzwingt die Zyklusplanung, egal welche KW gerade ist. | Ändert nicht, *welcher* Zyklus geplant wird — immer der auf die aktuelle Woche folgende. |
+| `USE_TEST_DATA=true` | Schaltet Putzplan-DB und Template auf die Testkopien um (`TEST_DS_B_ID`, `TEST_TEMPLATE_ID`). | Schaltet Slack **nicht** um — der Kanal hängt weiter an `SLACK_CHANNEL_ID`. |
+
+Ohne `FORCE_PLAN` passiert bei einem Testlauf mitten im Zyklus fast nichts: der Bot postet nur die Wochenerinnerung und meldet „kein Plan-Lauf". Zum Testen der Auslosung brauchst du ihn also fast immer.
+
+`DRY_RUN` und `FORCE_PLAN` zusammen sind die nützlichste Kombination: du siehst die vollständige Auslosung für den nächsten Zyklus, ohne dass irgendetwas passiert.
+
+Zusätzlich lenkt `SLACK_TEST_USER_ID` alle DMs auf dich um (siehe Schritt 2).
+
+## Schritt 5: Lokal ausführen
 
 ```bash
-$env:NOTION_TOKEN="..."; $env:SLACK_TOKEN="xoxb-..."; $env:DS_A_ID="..."; $env:DS_B_ID="..."; $env:SLACK_CHANNEL_ID="..."; $env:TEMPLATE_ID="..."; $env:SLACK_TEST_USER_ID="U07UDK6V29F"; $env:DRY_RUN="true"; $env:DEBUG="true"; python main.py
+$env:NOTION_TOKEN="..."; $env:SLACK_TOKEN="xoxb-..."; $env:DS_A_ID="..."; $env:DS_B_ID="..."; $env:SLACK_CHANNEL_ID="..."; $env:TEMPLATE_ID="..."; $env:DRY_RUN="true"; $env:DEBUG="true"; $env:FORCE_PLAN="true"; python main.py
 ```
 
 Sinnvolle Reihenfolge beim Hochfahren:
 
-1. `DRY_RUN=true`, `DEBUG=true` → nichts wird geschrieben, alles wird ausgegeben.
-2. `DRY_RUN=false` mit `FORCE_PLAN=true` gegen die **Notion-Kopie** und den Sandbox-Kanal → prüft Seitenerstellung, Relationen und Status.
-3. Erst danach echter Workspace (Phase 8).
+1. `DRY_RUN=true DEBUG=true FORCE_PLAN=true` gegen die **echten** Daten → zeigt die echte Auslosung, schreibt nichts.
+2. Dasselbe ohne `DRY_RUN`, dafür mit `USE_TEST_DATA=true` und Sandbox-Kanal → prüft Seitenerstellung, Relationen und Status.
+3. Erst danach der echte Workspace (Phase 8).
 
-`FORCE_PLAN=true` ist dabei wichtig: der Plan-Prozess läuft normalerweise nur in der letzten Woche eines Zyklus (aktuell KW 4, 8, 12, …), sonst müsstest du auf den richtigen Termin warten.
+Beim Start gibt der Bot in den ersten Zeilen aus, welche Datenquelle und welche Modi aktiv sind — ein Blick dorthin, bevor du dich über das Ergebnis wunderst.
+
+## Die Fake-User im Sandbox-Workspace
+
+Ein Slack-Sandbox-Workspace bringt ein paar vorgefertigte User mit. Wofür sie taugen:
+
+- ✅ **DM-Zustellung testen** — der Bot kann ihnen schreiben.
+- ✅ **Kanal-Erwähnungen testen** — sie tauchen als echte `<@U…>`-Mentions auf.
+- ❌ **Reaktionen testen** — dafür müsste man sich als sie einloggen, was nicht geht. Das ✅/❌ aus Phase 6 musst du an einer DM an dich selbst testen.
+- ❌ **E-Mail-Lookup testen** — ihre Adressen stehen nicht in Notion, `users_lookupByEmail` findet sie also nicht. Genau dafür gibt es `SLACK_TEST_USER_ID`.
+
+Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über dich selbst.
 
 ## Was ich von dir brauche, um mitzutesten
 
-- [ ] `Jahr`-Property in der Putzplan-DB angelegt (+ bestehende Seiten mit 2026 befüllt) — ohne die schlagen alle Wochen-Lookups fehl.
-- [ ] Sandbox-Kanal-ID und deine Slack-User-ID im Sandbox-Workspace (deine ID im echten Workspace ist `U07UDK6V29F`, im Sandbox-Workspace ist es eine andere).
-- [ ] Ob du mit einer Notion-Kopie oder nur mit `DRY_RUN` gegen die echten Daten testen willst.
+- [x] `Jahr`-Property in der Putzplan-DB (erledigt, alle 28 Seiten stehen auf 2026).
+- [ ] Kopie der **Putzplan**-DB (nicht der Mitgliederliste) + Relation auf einseitig stellen.
+- [ ] Sandbox-Kanal-ID und deine Slack-User-ID *im Sandbox-Workspace* (im echten Workspace ist sie `U07UDK6V29F`, in der Sandbox eine andere).
 - [ ] Die Tokens **nicht** hier in den Chat — die gehören in deine Shell bzw. in die GitHub-Secrets.

@@ -13,6 +13,33 @@ DS_B_ID = os.environ.get("DS_B_ID")  # Putzplan
 SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
 TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
 
+# Auf die Notion-Testkopien umschalten. Bewusst ein eigener Schalter statt
+# "einfach DS_A_ID überschreiben": so kann man nicht aus Versehen mit den
+# Produktivdaten testen, weil man vergessen hat, eine Variable zurückzusetzen.
+USE_TEST_DATA = os.environ.get("USE_TEST_DATA", "false").lower() == "true"
+TEST_DS_A_ID = os.environ.get("TEST_DS_A_ID")
+TEST_DS_B_ID = os.environ.get("TEST_DS_B_ID")
+TEST_TEMPLATE_ID = os.environ.get("TEST_TEMPLATE_ID")
+
+if USE_TEST_DATA:
+    # DS_B (Putzplan) und Template MÜSSEN Kopien sein — das ist die einzige
+    # Datenbank, in die der Bot schreibt. Kein stiller Fallback auf die echten
+    # IDs, das wäre genau der Unfall, den dieser Schalter verhindern soll.
+    _missing_test = [
+        name
+        for name, value in (("TEST_DS_B_ID", TEST_DS_B_ID), ("TEST_TEMPLATE_ID", TEST_TEMPLATE_ID))
+        if not value
+    ]
+    if _missing_test:
+        sys.exit(f"❌ USE_TEST_DATA=true, aber es fehlen: {', '.join(_missing_test)}")
+
+    DS_B_ID, TEMPLATE_ID = TEST_DS_B_ID, TEST_TEMPLATE_ID
+    # DS_A (Mitgliederliste) ist optional: der Bot liest daraus nur, er schreibt
+    # nie hinein. Ohne Kopie wird also einfach die echte Liste gelesen.
+    DS_A_ID = TEST_DS_A_ID or DS_A_ID
+
+DATENQUELLE = "🧪 TESTKOPIE" if USE_TEST_DATA else "🔴 PRODUKTIV"
+
 # Zum Testen: wenn gesetzt, gehen ALLE DMs an diese Slack-User-ID statt an die
 # echten Mitglieder. Im Sandbox-Workspace stimmen die E-Mail-Adressen sonst
 # nicht mit denen aus Notion überein und der Lookup läuft ins Leere.

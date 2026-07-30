@@ -63,7 +63,9 @@ def enrich_members(members, week_pages, kw, year):
             abs(cycles.week_index(w_kw, w_year) - target_index) for w_kw, w_year in assigned
         ]
 
-        member["putz_count"] = len(member["putz_page_ids"]) + len(member.get("extra_weeks", []))
+        # Bewusst nur auflösbare Seiten zählen: Sammelseiten wie 'Ausgetragen'
+        # oder 'Postponed' hängen zwar in der Relation, sind aber keine Einsätze.
+        member["putz_count"] = len(assigned)
         member["naechster_abstand"] = min(distances) if distances else None
 
         # Weich: Schonfrist von 3 Zyklen. Wird in den Fallback-Stufen aufgeweicht.

@@ -4,6 +4,7 @@ import unicodedata
 
 import requests
 
+import cycles
 from config import (
     DRY_RUN,
     DS_A_ID,
@@ -101,6 +102,14 @@ def get_week_pages():
             continue
         if year is None:
             debug(f"⚠️ Seite '{_title_text(props)}' hat kein Jahr — wird ignoriert.")
+            continue
+
+        # Sammelseiten wie 'Ausgetragen' (KW 0) oder 'Postponed' (KW 54) sind
+        # keine echten Wochen. Sie dürfen weder als Putzeinsatz zählen noch in
+        # die Abstandsrechnung einfließen — sonst sähe jede:r, der dort geparkt
+        # ist, aus wie frisch geputzt.
+        if not 1 <= int(kw) <= cycles.iso_weeks_in_year(int(year)):
+            debug(f"'{_title_text(props)}' (KW {int(kw)}) ist keine echte Kalenderwoche — ignoriert.")
             continue
 
         entry = {

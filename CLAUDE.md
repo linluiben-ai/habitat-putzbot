@@ -45,6 +45,9 @@ There is no test framework; `tests.py` is a plain script that fakes the Notion/S
 | `DEBUG` | `"true"` → verbose diagnostics (per-tier candidate counts, lookups) |
 | `FORCE_PLAN` | `"true"` → run cycle planning even outside the last week of a cycle |
 | `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](sandbox-setup.md)) |
+| `USE_TEST_DATA` | `"true"` → use the Notion test copies instead of production |
+| `TEST_DS_B_ID`, `TEST_TEMPLATE_ID` | Required when `USE_TEST_DATA=true`; config aborts rather than silently falling back to production |
+| `TEST_DS_A_ID` | Optional — the Mitgliederliste is only ever read, so the real one is fine for tests |
 
 In production these come from GitHub Actions secrets. Locally, export them directly — there is no `.env` loader.
 
@@ -88,6 +91,8 @@ The 2-new/2-old mix (`ist_neu` = joined less than a year ago) is the weakest cri
 - Notion API version `2025-09-03`: `data_source_id` (not `database_id`) as the parent when creating pages, and `/v1/data_sources/{id}/query` for queries. When `template` is used in a page-creation payload, `children` must **not** be present.
 - The Putzplan data source needs a **`Jahr` (number)** property. `Kalenderwoche` alone is ambiguous across years, which breaks recency ordering and cross-new-year planning. Pages without `Jahr` are skipped with a warning.
 - Weeks with `Status: Nicht auswählen` or `Archiv: true` are never touched.
+- The Putzplan database contains **sentinel pages that are not weeks** — "Ausgetragen" (KW 0) and "Postponed" (KW 54), a pre-`Putzstatus` workaround for parking members. `get_week_pages` drops any page whose KW is outside `1..iso_weeks_in_year`, and `putz_count` counts only *resolvable* pages, so these never count as a cleaning shift. Without that guard `week_index` clamps them to KW 53 and everyone parked there looks freshly cleaned. The pages are slated for deletion, but the guard should stay — it also protects against any future non-week page.
+- The bot **only ever writes to the Putzplan** data source; the Mitgliederliste is read-only. That is why test setups only need a Putzplan copy. Beware: writing the `Mitglieder` relation makes Notion write the inverse relation onto member pages, so a test Putzplan pointing at the real Mitgliederliste must use a one-way relation.
 - User-facing strings, print output, and Notion/Slack property names are German — keep new code consistent rather than mixing in English property names.
 - Notion relations return at most 25 items inline; `_relation_ids` logs a debug warning when there are more.
 - `venv/` and `.venv/` are both gitignored; either may be present locally.

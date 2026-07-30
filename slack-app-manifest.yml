@@ -1,0 +1,41 @@
+# Slack-App-Manifest für den Putzbot.
+#
+# Verwendung: api.slack.com/apps -> "Create New App" -> "From an app manifest"
+# -> Sandbox-Workspace wählen -> diese Datei reinkopieren.
+# Damit sind alle Scopes in einem Rutsch gesetzt, statt sie einzeln anzuklicken.
+#
+# Die Event-Subscription am Ende ist auskommentiert: Slack verifiziert die
+# Request-URL sofort beim Speichern: solange der Webhook aus Phase 5 nicht
+# läuft, schlägt das Anlegen der App sonst fehl. Erst einkommentieren (und die
+# URL eintragen), wenn der Server aus webhook-setup.md steht.
+
+display_information:
+  name: Putzbot (Sandbox)
+  description: Lost die woechentliche Putzcrew aus und benachrichtigt sie.
+  background_color: "#2c5f2d"
+
+features:
+  bot_user:
+    display_name: Putzbot
+    always_online: false
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write         # Nachrichten in Kanal und DMs
+      - im:write           # DM-Konversation oeffnen
+      - im:history         # eigene DMs lesen (fuer Reaktionen, Phase 5/6)
+      - users:read         # User-Liste
+      - users:read.email   # E-Mail -> Slack-User-ID, Kern des Mitglieder-Mappings
+      - reactions:read     # ✅/❌ auf DMs erkennen (Phase 5/6)
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+
+  # --- Erst ab Phase 5 einkommentieren ---
+  # event_subscriptions:
+  #   request_url: https://DEINE-URL/slack/events
+  #   bot_events:
+  #     - reaction_added
