@@ -4,55 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Putzbot" — a scheduled bot that runs the weekly cleaning-crew ("Putzplan") lottery for a club (das-habitat.de). It reads member and cleaning-schedule data from two linked Notion data sources, randomly draws members to fill the current week's crew, writes the result back to Notion, and posts a summary to Slack. It runs unattended via GitHub Actions (`.github/workflows/monday_cleanup.yml`), triggered on a cron (Mondays 08:00 UTC) or manually via `workflow_dispatch`.
+"Putzbot" — a scheduled bot that runs the cleaning-crew ("Putzplan") lottery for a club (das-habitat.de). It reads member and cleaning-schedule data from two linked Notion data sources, draws members to fill upcoming weeks' crews, writes the result back to Notion, and notifies people via Slack. It runs unattended via GitHub Actions (`.github/workflows/monday_cleanup.yml`) on a cron (Mondays 08:00 UTC) or manually via `workflow_dispatch`.
 
-All logic lives in [main.py](main.py); there is no package structure, framework, or build step.
+The year is divided into **13 cycles of 4 weeks** (cycle 1 = KW 1–4, … cycle 13 = KW 49–52; in 53-week ISO years KW 53 joins cycle 13). Every Monday the bot posts a reminder for the current week; in the **last week of a cycle** it additionally plans the whole *next* cycle — creating pages and drawing crews four weeks in advance so people can plan around it.
+
+[roadmap.md](roadmap.md) is the design doc for the full target state; [implementation-plan.md](implementation-plan.md) tracks which parts are built and records the agreed-upon decisions (candidate-pool rules, reschedule thresholds, verified Notion schemas). **Read implementation-plan.md before changing raffle or scheduling behavior** — it documents *why* the rules are what they are. The reschedule flow (Slack ✅/❌ reactions → webhook) is designed but not yet implemented; see [webhook-setup.md](webhook-setup.md).
 
 ## Commands
 
-Setup (Windows, `venv/` is the local convention used in this repo):
 ```bash
 python -m venv venv
 venv/Scripts/pip install -r requirements.txt
 ```
 
-Run the bot locally (requires env vars below):
+Run the bot (requires the env vars below):
 ```bash
 python main.py
 ```
 
-Dry run (loads and prints the qualified candidate pool, makes no Notion/Slack writes):
+Run the offline test suite — no credentials or network needed, also runs in CI:
 ```bash
-DRY_RUN=true python main.py
+python tests.py
 ```
 
-There is no formal test suite. `test_pm.py` and `test_lostopf.py` are standalone manual-check scripts (git-ignored, not run in CI) — `test_pm.py` sends a real Slack DM to verify token/lookup wiring, `test_lostopf.py` is a scratch copy of the candidate-pool logic from `main.py`. Run them directly with `python test_pm.py` if needed; don't treat them as an automated suite.
+There is no test framework; `tests.py` is a plain script that fakes the Notion/Slack layer and exits non-zero on failure. It covers what is painful to test live: year boundaries, 53-week years, exhausted candidate pools, and double-booking within a cycle. Add cases there rather than writing throwaway scripts.
 
-## Required environment variables
+`test_pm.py` and `test_lostopf.py` are old git-ignored scratch files; `test_lostopf.py` is a stale copy of pre-V3 pool logic and should not be used as a reference.
+
+## Environment variables
 
 | Variable | Purpose |
 |---|---|
 | `NOTION_TOKEN` | Notion integration token |
 | `SLACK_TOKEN` | Slack bot token |
-| `DS_A_ID` | Notion data source ID: Mitglieder (members) |
-| `DS_B_ID` | Notion data source ID: Putzliste (cleaning schedule) |
-| `SLACK_CHANNEL_ID` | Slack channel to post the weekly summary to |
-| `TEMPLATE_ID` | Notion page template ID used to create a new week's page |
-| `DRY_RUN` | `"true"` to only print the candidate pool and skip all writes |
+| `DS_A_ID` | Notion data source: Mitgliederliste |
+| `DS_B_ID` | Notion data source: Putzplan |
+| `SLACK_CHANNEL_ID` | Channel for reminders and cycle summaries |
+| `TEMPLATE_ID` | Notion page template for a new week's page |
+| `DRY_RUN` | `"true"` → run the whole flow but skip every Notion/Slack write |
+| `DEBUG` | `"true"` → verbose diagnostics (per-tier candidate counts, lookups) |
+| `FORCE_PLAN` | `"true"` → run cycle planning even outside the last week of a cycle |
+| `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](sandbox-setup.md)) |
 
-In production these are injected as GitHub Actions secrets (see the workflow file). Locally, set them in the shell or an untracked `.env`-style mechanism — there's no `.env` loader in the code, so export them directly.
+In production these come from GitHub Actions secrets. Locally, export them directly — there is no `.env` loader.
 
-## Architecture / flow (in `main.py::main`)
+## Module layout
 
-1. **Check current week** (`get_current_week_status`) — queries data source B (Putzliste) for a page matching the current ISO calendar week. Counts existing members via the `Anzahl Mitglieder` rollup, falling back to counting the `Mitglieder` relation directly if the rollup reads 0.
-2. **Load candidate pool** — queries data source A (Mitglieder) filtered to active, onboarded, non-passive members (see the Notion filter in `main()` for the exact status logic). For each member it resolves an email (prefers the `Interne Email` property, else derives `vorname.nachname@das-habitat.de` from the title via `clean_string`, which strips German umlauts/ß and diacritics). A member qualifies as a candidate if: not marked with a "❓" page icon, has an empty `Putzplan` relation (hasn't cleaned yet this cycle), and isn't already on this week's page.
-3. **Draw and write** — if the week needs more people (target crew size is 4), samples the shortfall from the candidate pool via `random.sample` and either `update_existing_page` (relation patch) or `create_page_from_template` (new page from `TEMPLATE_ID`, properties `Titel`/`Mitglieder`/`Kalenderwoche` override the template — note `children` must NOT be included in the payload when `template` is used, per the Notion API).
-4. **Notify Slack** — resolves each selected member's Slack user ID from their email (`get_slack_user_id`), builds a message tagging existing + newly-drawn members with a link back to the Notion page, and posts it via `chat_postMessage`.
+| File | Responsibility |
+|---|---|
+| [main.py](main.py) | Entrypoint. Orchestration only — decides reminder vs. reminder + planning. |
+| [config.py](config.py) | Env vars, Slack client, Notion headers, and **all tunable rules** as constants. |
+| [cycles.py](cycles.py) | Pure date math: cycle ↔ week mapping, year boundaries, week distances. No I/O. |
+| [notion.py](notion.py) | Every Notion call: paginated queries, week lookup, member loading, writes. |
+| [raffle.py](raffle.py) | Candidate-pool tiers and the draw itself. |
+| [slack_utils.py](slack_utils.py) | User lookup, sending, and all message texts. |
+| [scheduler.py](scheduler.py) | The two scheduled processes: `remind_current_week` and `plan_next_cycle`. |
 
-`structure.md` describes a more elaborate target design (multi-week cycle planning, reschedule flow via emoji reactions, per-member reminder DMs) that is **not yet implemented** — `main.py` currently only implements the single-week `Raffle` step described there. Treat `structure.md` as a design doc/roadmap, not a description of current behavior.
+`cycles.py` is separate from `scheduler.py` because both `raffle.py` and `scheduler.py` need week math; folding it in would create an import cycle.
+
+`DRY_RUN` is enforced *inside* the write functions in `notion.py`/`slack_utils.py`, so callers never check it. Any new write must respect this, or dry runs silently stop being safe.
+
+## How the draw works
+
+Eligibility is filtered in the Notion query itself (`notion.MEMBER_FILTER`): active membership status, onboarding done, and `Putzstatus` either empty or `Normal`. `Ausgetragen`, `Neu`, `Priorität` and `Postponed` are all excluded. (The V2 "❓ page icon" check is gone — `Putzstatus` replaced it.)
+
+`raffle.select_crew` then walks a ladder of tiers from strict to loose:
+
+```
+≤1 Einsätze + Schonfrist → ≤1 Einsätze → ≤2 + Schonfrist → ≤2 → ≤3 + Schonfrist → ≤3
+```
+
+Two rules that are easy to break by accident:
+
+1. **Locking.** If a tier has fewer candidates than open slots, *all* of them are locked in and only the remaining slots fall through to the looser tier. Someone who qualified under strict criteria must not lose their spot because the criteria were relaxed afterwards.
+2. **`ist_zu_dicht_dran` is a hard block.** The soft "Schonfrist" (`RECENCY_WEEKS`, 12) is relaxable by design; the minimum gap between two assignments (`MIN_WEEKS_BETWEEN`, 4) is *not*, and applies on every tier. Without it the relaxed tiers happily draw someone for two weeks of the same cycle. There is a regression test for this.
+
+The 2-new/2-old mix (`ist_neu` = joined less than a year ago) is the weakest criterion and only applies when sampling within the final tier, counting members already on the page.
+
+`enrich_members` must be re-run per target week — distances are relative to the week being planned. Crews drawn earlier in the same run are tracked in `member["extra_weeks"]`, because the Notion relation is stale until the run finishes.
 
 ## Working notes
 
-- Uses the Notion API version `2025-09-03`, which requires `data_source_id` (not `database_id`) as the parent when creating pages, and `/v1/data_sources/{id}/query` (not `/v1/databases/{id}/query`) for queries.
-- User-facing strings, print statements, and Notion/Slack property names are in German — keep new code consistent with this rather than mixing in English property names.
-- `venv/` and `.venv/` are both gitignored; either may be present locally, pick one.
+- Notion API version `2025-09-03`: `data_source_id` (not `database_id`) as the parent when creating pages, and `/v1/data_sources/{id}/query` for queries. When `template` is used in a page-creation payload, `children` must **not** be present.
+- The Putzplan data source needs a **`Jahr` (number)** property. `Kalenderwoche` alone is ambiguous across years, which breaks recency ordering and cross-new-year planning. Pages without `Jahr` are skipped with a warning.
+- Weeks with `Status: Nicht auswählen` or `Archiv: true` are never touched.
+- User-facing strings, print output, and Notion/Slack property names are German — keep new code consistent rather than mixing in English property names.
+- Notion relations return at most 25 items inline; `_relation_ids` logs a debug warning when there are more.
+- `venv/` and `.venv/` are both gitignored; either may be present locally.

@@ -6,6 +6,19 @@ on:
     # '0 8 * * 1' bedeutet: montags um 08:00 UTC.
     - cron: '0 8 * * 1'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry Run — nichts in Notion/Slack schreiben'
+        type: boolean
+        default: false
+      debug:
+        description: 'Debug — ausführliche Diagnose-Ausgaben'
+        type: boolean
+        default: false
+      force_plan:
+        description: 'Plan-Lauf erzwingen (auch außerhalb der letzten Zykluswoche)'
+        type: boolean
+        default: false
 
 jobs:
   run-putzbot:
@@ -18,13 +31,16 @@ jobs:
       - name: Python aufsetzen
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Bibliotheken installieren
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Tests
+        run: python tests.py
 
       - name: Skript ausführen
         env:
@@ -34,4 +50,7 @@ jobs:
           DS_B_ID: ${{ secrets.DS_B_ID }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEBUG: ${{ inputs.debug }}
+          FORCE_PLAN: ${{ inputs.force_plan }}
         run: python main.py
