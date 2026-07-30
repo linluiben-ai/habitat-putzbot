@@ -84,6 +84,35 @@ PUTZPLAN_RELATION_PROP = os.environ.get("PUTZPLAN_RELATION_PROP", "Putzplan")
 # nicht mit denen aus Notion überein und der Lookup läuft ins Leere.
 SLACK_TEST_USER_ID = os.environ.get("SLACK_TEST_USER_ID")
 
+# Auf den Sandbox-Workspace umschalten. Analog zu USE_TEST_DATA ein eigener
+# Schalter, damit man zum Testen nicht die produktiven Werte überschreiben und
+# hinterher wieder zurückschreiben muss.
+SANDBOX = os.environ.get("SANDBOX", "false").lower() == "true"
+SANDBOX_SLACK_TOKEN = os.environ.get("SANDBOX_SLACK_TOKEN")
+SANDBOX_SLACK_CHANNEL_ID = os.environ.get("SANDBOX_SLACK_CHANNEL_ID")
+SANDBOX_SLACK_TEST_USER_ID = os.environ.get("SANDBOX_SLACK_TEST_USER_ID")
+
+if SANDBOX:
+    # Token und Kanal sind Pflicht: ein Fallback auf die Produktivwerte hieße,
+    # dass ein vermeintlicher Sandbox-Lauf im echten Workspace landet.
+    _missing_sandbox = [
+        name
+        for name, value in (
+            ("SANDBOX_SLACK_TOKEN", SANDBOX_SLACK_TOKEN),
+            ("SANDBOX_SLACK_CHANNEL_ID", SANDBOX_SLACK_CHANNEL_ID),
+        )
+        if not value
+    ]
+    if _missing_sandbox:
+        sys.exit(f"❌ SANDBOX=true, aber es fehlen: {', '.join(_missing_sandbox)}")
+
+    SLACK_TOKEN = SANDBOX_SLACK_TOKEN
+    SLACK_CHANNEL_ID = SANDBOX_SLACK_CHANNEL_ID
+    # Im Sandbox-Workspace hat man eine andere User-ID als im echten.
+    SLACK_TEST_USER_ID = SANDBOX_SLACK_TEST_USER_ID or SLACK_TEST_USER_ID
+
+SLACK_ZIEL = "🧪 SANDBOX" if SANDBOX else "🔴 PRODUKTIV"
+
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 # Plan-Lauf erzwingen, auch wenn gerade nicht die letzte Woche eines Zyklus ist (zum Testen).

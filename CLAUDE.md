@@ -45,6 +45,9 @@ There is no test framework; `tests.py` is a plain script that fakes the Notion/S
 | `DEBUG` | `"true"` → verbose diagnostics (per-tier candidate counts, lookups) |
 | `FORCE_PLAN` | `"true"` → run cycle planning even outside the last week of a cycle |
 | `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](sandbox-setup.md)) |
+| `SANDBOX` | `"true"` → switch Slack to the sandbox workspace |
+| `SANDBOX_SLACK_TOKEN`, `SANDBOX_SLACK_CHANNEL_ID` | Required when `SANDBOX=true`; config aborts rather than falling back to the real workspace |
+| `SANDBOX_SLACK_TEST_USER_ID` | Sandbox DM target — a *different* user ID than in the real workspace |
 | `USE_TEST_DATA` | `"true"` → use the Notion test copies instead of production |
 | `TEST_DS_B_ID`, `TEST_TEMPLATE_ID` | Required when `USE_TEST_DATA=true`; config aborts rather than silently falling back to production |
 | `TEST_DS_A_ID` | Optional — the Mitgliederliste is only ever read, so the real one is fine for tests |
@@ -65,6 +68,8 @@ In production these come from GitHub Actions secrets. Locally, copy [.env.exampl
 | [scheduler.py](scheduler.py) | The two scheduled processes: `remind_current_week` and `plan_next_cycle`. |
 
 `cycles.py` is separate from `scheduler.py` because both `raffle.py` and `scheduler.py` need week math; folding it in would create an import cycle.
+
+`SANDBOX` and `USE_TEST_DATA` are deliberately two switches (Slack vs. Notion) rather than one "test mode": dry-running the raffle against *real* Notion data while pointing Slack at the sandbox is the most common combination. Both abort loudly if their required companions are missing — never a silent fallback to production.
 
 `DRY_RUN` is enforced *inside* the write functions in `notion.py`/`slack_utils.py`, so callers never check it. Any new write must respect this, or dry runs silently stop being safe.
 

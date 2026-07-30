@@ -10,7 +10,15 @@ import sys
 import cycles
 import notion
 import scheduler
-from config import DATENQUELLE, DEBUG, DRY_RUN, FORCE_PLAN, SLACK_TEST_USER_ID, check_env
+from config import (
+    DATENQUELLE,
+    DEBUG,
+    DRY_RUN,
+    FORCE_PLAN,
+    SLACK_TEST_USER_ID,
+    SLACK_ZIEL,
+    check_env,
+)
 
 
 def main():
@@ -20,7 +28,7 @@ def main():
     cycle = cycles.cycle_of_week(kw)
 
     print(f"🤖 Putzbot — KW {kw}/{year} (Zyklus {cycle})")
-    print(f"   Notion-Daten: {DATENQUELLE}")
+    print(f"   Notion: {DATENQUELLE}   Slack: {SLACK_ZIEL}")
     if DRY_RUN:
         print("🧪 DRY RUN — keine Schreibzugriffe auf Notion oder Slack.")
     if DEBUG:

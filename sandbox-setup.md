@@ -14,7 +14,14 @@ Per **App-Manifest**, nicht Klick für Klick:
 
 1. Auf [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From an app manifest*.
 2. Sandbox-Workspace wählen, dann den Inhalt von [slack-app-manifest.yml](slack-app-manifest.yml) reinkopieren.
-3. **Install to Workspace** → das **Bot User OAuth Token** (`xoxb-…`) kopieren. Das ist der `SLACK_TOKEN` für die Sandbox.
+3. **Install to Workspace** → das **Bot User OAuth Token** (`xoxb-…`) kopieren. Das gehört in `SANDBOX_SLACK_TOKEN`.
+
+   ⚠️ Slack zeigt unter Umständen **zwei** Tokens an — nicht verwechseln:
+
+   | Token | Wo | Wofür |
+   |---|---|---|
+   | **Bot User OAuth Token** `xoxb-…` | OAuth & Permissions | Alle Web-API-Aufrufe des Bots: Nachrichten posten, DMs öffnen, E-Mail→User-ID. **Das ist der, den der Bot braucht.** |
+   | **App-Level Token** `xapp-…` | Basic Information → App-Level Tokens | Nur für Socket Mode und ein paar org-weite APIs. Wird hier aktuell **nicht** gebraucht. |
 4. Im Sandbox-Workspace einen Kanal anlegen (z.B. `#putzbot-test`), den Bot per `/invite @Putzbot` hinzufügen, und die Kanal-ID notieren (Kanal → Details → ganz unten).
 
 Die Scopes stehen alle im Manifest, inklusive derer für Phase 5/6 (`reactions:read`, `im:history`) — die schaden jetzt nicht und ersparen später eine Neuinstallation der App.
@@ -70,7 +77,17 @@ Vier unabhängige Schalter, beliebig kombinierbar:
 | `DRY_RUN=true` | Lässt den kompletten Ablauf laufen: Wochen-Lookup, Kandidatenpool, Auslosung, fertig formatierte Nachrichtentexte. Jeder Schreibzugriff wird stattdessen als `[DRY RUN] würde …` ausgegeben. | Ändert nichts in Notion, verschickt nichts in Slack. |
 | `DEBUG=true` | Zusätzliche Diagnosezeilen: wie viele Seiten je Query geladen wurden, wie groß der Kandidatenpool auf **jeder** Fallback-Stufe ist, welche Stufe am Ende gezogen hat, warum eine Seite ignoriert wurde. | Ändert am Verhalten nichts — reine Ausgabe. |
 | `FORCE_PLAN=true` | Erzwingt die Zyklusplanung, egal welche KW gerade ist. | Ändert nicht, *welcher* Zyklus geplant wird — immer der auf die aktuelle Woche folgende. |
-| `USE_TEST_DATA=true` | Schaltet Putzplan-DB und Template auf die Testkopien um (`TEST_DS_B_ID`, `TEST_TEMPLATE_ID`). | Schaltet Slack **nicht** um — der Kanal hängt weiter an `SLACK_CHANNEL_ID`. |
+| `USE_TEST_DATA=true` | Schaltet Putzplan-DB und Template auf die Testkopien um (`TEST_DS_B_ID`, `TEST_TEMPLATE_ID`). | Schaltet Slack **nicht** um. |
+| `SANDBOX=true` | Schaltet Token, Kanal und DM-Ziel auf den Sandbox-Workspace um (`SANDBOX_SLACK_*`). | Schaltet Notion **nicht** um. |
+
+`SANDBOX` und `USE_TEST_DATA` sind absichtlich getrennt: die nützlichste Kombination ist oft Sandbox-Slack **mit** echten Notion-Daten im Dry Run — echte Auslosung sehen, ohne dass jemand etwas mitbekommt. Beide brechen ab, wenn ihre Pflichtwerte fehlen, statt still auf Produktiv zurückzufallen.
+
+Beim Start zeigt der Bot in Zeile 2, wohin er zeigt:
+
+```
+🤖 Putzbot — KW 31/2026 (Zyklus 8)
+   Notion: 🧪 TESTKOPIE   Slack: 🧪 SANDBOX
+```
 
 Ohne `FORCE_PLAN` passiert bei einem Testlauf mitten im Zyklus fast nichts: der Bot postet nur die Wochenerinnerung und meldet „kein Plan-Lauf". Zum Testen der Auslosung brauchst du ihn also fast immer.
 
@@ -115,7 +132,10 @@ Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über di
 
 ## Was ich von dir brauche, um mitzutesten
 
-- [x] `Jahr`-Property in der Putzplan-DB (erledigt, alle 28 Seiten stehen auf 2026).
-- [ ] Kopie der **Putzplan**-DB (nicht der Mitgliederliste) + Relation auf einseitig stellen.
-- [ ] Sandbox-Kanal-ID und deine Slack-User-ID *im Sandbox-Workspace* (im echten Workspace ist sie `U07UDK6V29F`, in der Sandbox eine andere).
-- [ ] Die Tokens **nicht** hier in den Chat — die gehören in deine Shell bzw. in die GitHub-Secrets.
+- [x] `Jahr`-Property in der Putzplan-DB (alle 28 Seiten auf 2026).
+- [x] Kopie der Putzplan-DB: „❌ Putzplan (NUR FÜR TESTS)", Data-Source-ID `565b71ac-7d09-82ec-8ce8-870a78528167`. Inhalte inkl. Relationen sind mitgekommen, die Historie steht also für Tests zur Verfügung.
+- [x] Zweite Relation auf der Mitgliederliste heißt **`Putztest`** → `PUTZPLAN_RELATION_PROP=Putztest`.
+- [x] Sandbox-Slack-App eingerichtet.
+- [ ] `TEST_TEMPLATE_ID` prüfen: muss zu dem Template passen, auf das `TEMPLATE_ID` produktiv zeigt (siehe [.env.example](.env.example)).
+- [ ] Sandbox-Kanal-ID und Sandbox-User-ID in die `.env` eintragen.
+- [ ] Die Tokens **nicht** in den Chat — die gehören in die `.env` bzw. in die GitHub-Secrets.
