@@ -31,8 +31,6 @@ from config import (
     CYCLE_LENGTH_WEEKS,
     META_AUSLOSUNG,
     META_FRAGE,
-    RESCHEDULE_ASK_AT,
-    RESCHEDULE_DENY_AT,
     RESCHEDULE_MAX_CYCLES_AHEAD,
     WEEK_STATUS_BLOCKED,
     debug,
@@ -79,13 +77,9 @@ def zielwoche_bestimmen(ziel_kw, heute_kw, heute_jahr):
     return (ziel_kw, jahr), None
 
 
-def kapazitaets_entscheidung(anzahl_nachher):
-    """'ok' | 'info' | 'abgelehnt' — was passiert bei dieser Belegung?"""
-    if anzahl_nachher >= RESCHEDULE_DENY_AT:
-        return "abgelehnt"
-    if anzahl_nachher >= RESCHEDULE_ASK_AT:
-        return "info"
-    return "ok"
+def ist_platz_frei(belegung):
+    """Passt noch jemand in eine Woche, die schon `belegung` Leute hat?"""
+    return belegung < CREW_SIZE
 
 
 def naechster_zustand(verlauf, aktuelle_wochen):
@@ -178,15 +172,15 @@ def _umtragen(member, alte_woche, ziel_kw, ziel_jahr, week_pages, members, looku
         )
         return False
 
-    entscheidung = kapazitaets_entscheidung(ziel["member_count"] + 1)
-    if entscheidung == "abgelehnt":
+    if not ist_platz_frei(ziel["member_count"]):
         _frage_stellen(
             member, alte_woche["kw"], alte_woche["year"], heute_kw, heute_jahr,
             text=slack_utils.build_reschedule_fehler(
                 member,
                 f"KW {ziel_kw}",
-                f"da sind schon {ziel['member_count']} Leute eingetragen, das reicht dicke",
+                f"da stehen schon {ziel['member_count']} Leute drin, die Woche ist voll",
                 beispiel,
+                link=ziel["page_url"],
             ),
         )
         return False
@@ -225,15 +219,7 @@ def _umtragen(member, alte_woche, ziel_kw, ziel_jahr, week_pages, members, looku
         member, slack_utils.build_reschedule_ok(member, alte_woche["kw"], ziel_kw, ziel_url)
     )
 
-    # 4. Bei Überbesetzung die Crew informieren, dass jemand tauschen könnte
-    if entscheidung == "info":
-        for anderes in scheduler.crew_from_ids(ziel["member_ids"], lookup):
-            slack_utils.send_dm(
-                anderes,
-                slack_utils.build_woche_voll_info(ziel_kw, len(neue_ids), ziel_url),
-            )
-
-    # 5. Alte Woche ggf. wieder auffüllen
+    # 4. Alte Woche ggf. wieder auffüllen
     aktuelle_alte = week_pages["by_week"].get((alte_woche["kw"], alte_woche["year"]))
     if aktuelle_alte and aktuelle_alte["member_count"] < CREW_SIZE:
         print(f"   🎲 KW {alte_woche['kw']} ist unterbesetzt — lose nach.")

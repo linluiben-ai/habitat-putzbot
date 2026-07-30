@@ -17,7 +17,7 @@ Stand der Abstimmung, gilt als verbindlich für die Implementierung:
 | Aktualität | Wer in den letzten 3 Zyklen (12 Wochen) geputzt hat, kommt erst in den Fallback-Stufen in den Topf. |
 | Alt/Neu | „Neu" = Eintrittsdatum < 1 Jahr her. Ziel 2 neue + 2 alte pro Woche, aber **weichstes Kriterium** — wird in `raffle.py` behandelt, nicht im Pool-Bau. |
 | Fallback-Fairness | Wer **vor** einer Fallback-Lockerung schon im Topf war, wird garantiert gezogen; nur die Restplätze werden mit gelockerten Kriterien besetzt. |
-| Reschedule-Kapazität | 1–4 Mitglieder = ok · 5 = Crew wird gefragt, ob jemand tauschen will · ab 6 = Zielwoche wird abgelehnt. |
+| Reschedule-Kapazität | **Harte Grenze bei 4.** Zielwoche mit weniger als 4 Leuten = ok, sonst abgelehnt mit Link zur Woche und Bitte, eine andere zu wählen. Der zwischenzeitlich angedachte weiche Puffer (5 = Crew fragen) ist wieder raus — viel Mechanik für einen Fall, der kaum eintritt, weil immer nur ein Zyklus im Voraus geplant wird und weiter entfernte Wochen praktisch leer sind. Steht als Idee im Feature-Tracker. |
 | Reschedule-Lookup | Läuft immer `Notion Lookup` für alte + neue Woche (auch um die Belegung zu prüfen und die Seite ggf. anzulegen). |
 | Reaktionen | Ausgeloste Mitglieder stehen **von Anfang an** in ihrer Woche. Nur ❌ trägt sie wieder aus. |
 | Erinnerungen/Fristen | Kein Auto-Confirm, keine Deadline in V3. Vertagt auf **V3.1** (Feature-Tracker-DB `2f6b71ac7d098024af8bd0059351cd87`). |
@@ -86,7 +86,7 @@ Der Umzug auf Socket Mode (dauerhafte WebSocket-Verbindung, Reaktionen in Sekund
 - [ ] ❌ auf der Auslos-DM → Bot fragt per DM nach der Zielwoche (Zahleneingabe).
 - [ ] Antwort des Mitglieds aus der DM-Historie lesen und validieren (existierende KW, in der Zukunft, innerhalb der nächsten 10 Zyklen, nicht gesperrt).
 - [ ] **Erst bei gültiger Antwort** wird umgetragen — bis dahin bleibt das Mitglied in seiner Woche, damit sie nicht unbesetzt dasteht, falls nie eine Antwort kommt (so steht es auch in [roadmap.md](roadmap.md)).
-- [ ] Kapazitätsprüfung der Zielwoche: ≤4 ok · 5 = umtragen **und** die Crew informieren, dass jemand tauschen könnte · ≥6 = ablehnen, neue Woche erfragen.
+- [ ] Kapazitätsprüfung der Zielwoche: weniger als 4 Leute = umtragen, sonst ablehnen und mit Link zur Woche erneut fragen.
 - [ ] Zielwoche anlegen, falls es noch keine Seite gibt.
 - [ ] Falls die alte Woche dadurch unterbesetzt ist: erneut auslosen, mit Ausschluss des gerade Ausgetragenen.
 - [ ] `RESCHEDULE_ENABLED = True` (schaltet den ❌-Hinweis in den DMs frei).

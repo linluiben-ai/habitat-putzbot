@@ -282,12 +282,11 @@ def test_reschedule_logik():
           reschedule.zielwoche_bestimmen(31, 31, 2026)[0], None)
     check("Unsinn wird abgelehnt", reschedule.zielwoche_bestimmen(None, 31, 2026)[0], None)
 
-    print("\n=== Reschedule: Kapazität ===")
-    check("3 Leute -> ok", reschedule.kapazitaets_entscheidung(3), "ok")
-    check("4 Leute -> ok", reschedule.kapazitaets_entscheidung(4), "ok")
-    check("5 Leute -> Crew informieren", reschedule.kapazitaets_entscheidung(5), "info")
-    check("6 Leute -> ablehnen", reschedule.kapazitaets_entscheidung(6), "abgelehnt")
-    check("7 Leute -> ablehnen", reschedule.kapazitaets_entscheidung(7), "abgelehnt")
+    print("\n=== Reschedule: Kapazität (harte Grenze bei 4) ===")
+    check("leere Woche", reschedule.ist_platz_frei(0), True)
+    check("3 Leute -> passt noch jemand", reschedule.ist_platz_frei(3), True)
+    check("4 Leute -> voll", reschedule.ist_platz_frei(4), False)
+    check("5 Leute -> voll", reschedule.ist_platz_frei(5), False)
 
     print("\n=== Reschedule: Zustand aus dem DM-Verlauf ===")
     aktuell = {(5, 2027)}
@@ -415,19 +414,21 @@ def test_poll_flow():
 
     print("\n=== Poll: volle Zielwoche wird abgelehnt ===")
     writes, dms, _ = _poll_szenario([user_msg("40"), frage, auslosung],
-                                    ziel_woche_belegung=["A", "B", "C", "D", "E"])
+                                    ziel_woche_belegung=["M5", "M6", "M7", "M9"])
     check("nichts umgetragen", [w for w in writes if w[0] == "update"], [])
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
-    check("Begruendung nennt die Belegung", "5" in dms[0][2], True)
+    check("Begruendung nennt die Belegung", "4" in dms[0][2], True)
+    check("Link zur Woche dabei", "u40" in dms[0][2], True)
+    check("die dortige Crew wird NICHT behelligt",
+          [d for d in dms if d[0] != "M0"], [])
 
-    print("\n=== Poll: 5 Leute -> umtragen und Crew informieren ===")
+    print("\n=== Poll: teilbesetzte Zielwoche wird angenommen ===")
     writes, dms, _ = _poll_szenario([user_msg("40"), frage, auslosung],
-                                    ziel_woche_belegung=["M5", "M6", "M7", "M9"])
+                                    ziel_woche_belegung=["M5", "M6", "M7"])
     ziel_updates = [w for w in writes if w[0] == "update" and w[1] == "p40"]
     check("Zielwoche wurde geschrieben", len(ziel_updates), 1)
     check("M0 ist drin", "M0" in ziel_updates[0][2], True)
-    infos = [d for d in dms if d[0] in ("M5", "M6", "M7", "M9")]
-    check("bestehende Crew wurde informiert", len(infos), 4)
+    check("Zielwoche ist jetzt genau voll", len(ziel_updates[0][2]), 4)
 
     print("\n=== Poll: Unsinn fuehrt zu erneuter Nachfrage ===")
     writes, dms, _ = _poll_szenario([user_msg("weiss nicht"), frage, auslosung])

@@ -37,8 +37,13 @@ def get_slack_user_id(email):
 
 
 def vorname(member):
-    """'Nachname, Vorname' -> 'Vorname'."""
-    return member["name"].split(",")[-1].strip()
+    """'Nachname, Vorname' -> 'Vorname'.
+
+    Fällt auf den vollen Titel zurück, wenn hinter dem Komma nichts steht —
+    sonst stünde in der Nachricht eine leere Erwähnung.
+    """
+    kurz = member["name"].split(",")[-1].strip()
+    return kurz or member["name"].strip().rstrip(",").strip() or "?"
 
 
 def mention(member):
@@ -236,24 +241,17 @@ def build_reschedule_ok(member, alte_kw, neue_kw, page_url):
     return text
 
 
-def build_reschedule_fehler(member, eingabe, grund, max_kw_hinweis):
-    return (
+def build_reschedule_fehler(member, eingabe, grund, max_kw_hinweis, link=None):
+    text = (
         f"Hm, mit `{eingabe}` kann ich nichts anfangen: {grund}\n\n"
         f"Antworte bitte nochmal mit einer Kalenderwoche als Zahl, z.B. "
         f"`{max_kw_hinweis}`."
     )
-
-
-def build_woche_voll_info(kw, anzahl, page_url):
-    """Info an die Crew, wenn eine Woche durch einen Tausch überbesetzt ist."""
-    text = (
-        f"🧹 Kleine Info zu *KW {kw}*: ihr seid jetzt zu {anzahl}. "
-        f"Das ist mehr als die üblichen 4 — schön, aber nicht nötig.\n\n"
-        f"Wer lieber in einer anderen Woche putzen möchte, reagiert einfach mit ❌ "
-        f"auf seine Auslos-Nachricht, dann suchen wir eine neue Woche."
-    )
-    if page_url:
-        text += f"\n\n👉 <{page_url}|Zur Woche in Notion>"
+    if link:
+        text += (
+            f"\n\n👉 <{link}|Hier siehst du die Woche in Notion> — "
+            f"such dir von dort eine mit weniger als 4 Leuten aus."
+        )
     return text
 
 

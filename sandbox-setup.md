@@ -130,18 +130,25 @@ Ein Slack-Sandbox-Workspace bringt ein paar vorgefertigte User mit. Wofür sie t
 
 Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über dich selbst.
 
-## Offene Blocker (Stand 30.07.2026)
+## Stand der Testläufe (30.07.2026)
 
-Beim ersten Live-Versuch sind vier Dinge aufgefallen, die alle nur du beheben kannst:
+**Funktioniert** — Dry Run gegen Sandbox-Slack + Notion-Testkopie läuft komplett durch:
+28 Wochenseiten geladen, Sammelseiten korrekt ignoriert, 204 Mitglieder über mehrere
+Seiten paginiert, davon 70 losbar, Zyklus 9 (KW 33–36) geplant, je 2 neue + 2 alte
+Mitglieder gezogen, DMs umgeleitet. Poll-Modus läuft ebenfalls sauber.
+
+**Noch offen:**
 
 | Problem | Symptom | Behebung |
 |---|---|---|
-| `NOTION_TOKEN` ungültig | HTTP 401 `API token is invalid` auf **allen** Datenquellen (auch produktiv) | Token in den Notion-Integrationseinstellungen neu erzeugen und in `.env` + GitHub-Secrets eintragen. Format war korrekt (`ntn_…`, 50 Zeichen) — der Wert ist also nicht vertippt, sondern abgelaufen/zurückgezogen. |
-| `SLACK_TOKEN` (produktiv) ungültig | `invalid_auth` | Bot-Token des produktiven Workspace neu holen. |
-| Sandbox-App hat zu wenige Scopes | `missing_scope`, vorhanden nur `channels:history,chat:write` | App mit [slack-app-manifest.yml](slack-app-manifest.yml) neu konfigurieren (oder Scopes von Hand ergänzen) und **neu installieren**. Fehlen: `im:write`, `im:history`, `users:read`, `users:read.email`, `reactions:read`. |
+| Sandbox-App hat zu wenige Scopes | `missing_scope`, vorhanden nur `channels:history,chat:write` | App mit [slack-app-manifest.yml](slack-app-manifest.yml) neu konfigurieren und **neu installieren**. Fehlen: `im:write`, `im:history`, `users:read`, `users:read.email`, `reactions:read`. Ohne die gehen keine DMs und keine Reaktionsabfrage. |
 | Bot ist nicht im Sandbox-Kanal | `not_in_channel` | Im Testkanal `/invite @putzbot` ausführen. |
+| Datenfehler in der Mitgliederliste | Mitglied „Zadlo, " hat keinen Vornamen | In Notion den Vornamen ergänzen. Sonst greift zwar der Fallback (Anzeige „Zadlo"), aber die abgeleitete E-Mail `.zadlo@das-habitat.de` ist unbrauchbar — diese Person bekäme produktiv nie eine DM. |
 
-Der Sandbox-Bot-Token selbst funktioniert (Team „Habitat Sandbox", Bot `putzbot`).
+**Noch nicht verifiziert:** dass Slack die Message-Metadata über `conversations_history`
+zurückliefert. Dafür fehlen die DM-Scopes. Ist eine dokumentierte Slack-Funktion, aber es
+ist die eine Annahme, auf der der ganze Reschedule-Flow steht — also beim ersten echten
+Testlauf mit `DEBUG=true` gezielt darauf schauen.
 
 ## Was ich von dir brauche, um mitzutesten
 

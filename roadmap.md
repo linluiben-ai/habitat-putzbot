@@ -118,6 +118,7 @@ Bewusst **nicht** Teil von V3, damit die Grundfunktion erst einmal komplett und 
 - Ebenfalls Socket-Mode-/Webhook-abhängig (Slash-Commands sind HTTP-Requests von Slack an uns).
 
 ### Weitere Ideen
+- **Weicher Puffer über 4 hinaus:** eine Zielwoche beim Tauschen auch mit 5 Leuten zulassen und die Crew fragen, ob jemand die Gelegenheit zum Tauschen nutzen möchte. In V3.0 bewusst weggelassen (harte Grenze bei 4) — der Fall tritt selten ein, und eine Rundmail an vier Leute erzeugt eher neue Tauschwünsche, als dass sie welche löst.
 - `Putzstatus: Priorität` und `Postponed` mit echter Sonderbehandlung statt pauschalem Ausschluss (Priorität = bevorzugt ziehen, Postponed = befristet aussetzen).
 - Direkter Tausch zwischen zwei Mitgliedern („ich nehme deine Woche, du meine").
 - Statistik-Übersicht: wer hat wie oft geputzt, wie fair war die Verteilung übers Jahr.

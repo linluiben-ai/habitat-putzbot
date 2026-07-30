@@ -157,8 +157,10 @@ WEEK_STATUS_DONE = "Erledigt"
 # --- Reschedule ---
 RESCHEDULE_ENABLED = True     # False: keine ❌-Option in den DMs
 RESCHEDULE_MAX_CYCLES_AHEAD = 10
-RESCHEDULE_ASK_AT = 5         # ab so vielen Leuten: Crew informieren, dass getauscht werden könnte
-RESCHEDULE_DENY_AT = 6        # ab so vielen Leuten: Zielwoche ablehnen
+# Harte Obergrenze: eine Zielwoche wird abgelehnt, sobald dort schon CREW_SIZE
+# Leute stehen. Bewusst kein weicher Puffer mit Rückfrage an die Crew — das
+# wäre viel Mechanik für einen Fall, der kaum eintritt (geplant wird immer nur
+# ein Zyklus im Voraus, weiter entfernte Wochen sind praktisch immer leer).
 
 # Emoji-Namen, wie Slack sie liefert (ohne Doppelpunkte). Mehrere Varianten,
 # weil Leute nicht zuverlässig dasselbe Häkchen bzw. Kreuz erwischen.
