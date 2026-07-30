@@ -71,25 +71,29 @@ Templates: „Neue Putzcrew (Automation)" `2eab71ac-7d09-80ef-954f-d3e298915dfe`
 - [x] Wöchentliche Erinnerung mit @-Erwähnungen der Crew in den Zielkanal.
 - [x] Läuft jeden Montag, unabhängig vom Plan-Lauf.
 
-## Phase 5 — Reaktionen per Polling (statt Webhook)
+## Phase 5 — Reaktionen per Polling (statt Webhook) ✅
 
 **Entscheidung:** Kein Webhook-Server für V3. Der Bot fragt stattdessen mehrmals täglich bei Slack nach, ob jemand auf seine DMs reagiert hat. Begründung: Ausgelost wird 4 Wochen im Voraus, ein paar Stunden Reaktionszeit sind völlig ausreichend — und dafür entfallen Server, öffentliche URL, HTTPS und Hosting komplett. Läuft weiter auf GitHub Actions.
 
 Der Umzug auf Socket Mode (dauerhafte WebSocket-Verbindung, Reaktionen in Sekunden) kommt mit dem Hetzner-Server, siehe Phase 9. Der Zustands-/Zuordnungsteil ist bei beiden Varianten identisch, der Wechsel betrifft nur die Zustellung.
 
-- [ ] Zuordnung DM ↔ (Mitglied, KW, Jahr) über **Slack-Message-Metadata** — kein externer Speicher nötig, die Info hängt an der Nachricht selbst.
-- [ ] Eigener Workflow `poll_reactions.yml`, mehrmals täglich zu Wachzeiten.
-- [ ] `python main.py poll` als eigener Modus neben dem wöchentlichen Lauf.
+- [x] Zuordnung DM ↔ (Mitglied, KW, Jahr) über **Slack-Message-Metadata** — kein externer Speicher nötig, die Info hängt an der Nachricht selbst.
+- [x] Eigener Workflow `poll_reactions.yml`, 5× täglich zu Wachzeiten. Beide Workflows teilen sich eine `concurrency`-Group, damit nie zwei Läufe gleichzeitig schreiben.
+- [x] `python main.py poll` als eigener Modus neben dem wöchentlichen Lauf.
 
-## Phase 6 — `reschedule.py`
+## Phase 6 — `reschedule.py` ✅
 
-- [ ] ❌ auf der Auslos-DM → Bot fragt per DM nach der Zielwoche (Zahleneingabe).
-- [ ] Antwort des Mitglieds aus der DM-Historie lesen und validieren (existierende KW, in der Zukunft, innerhalb der nächsten 10 Zyklen, nicht gesperrt).
-- [ ] **Erst bei gültiger Antwort** wird umgetragen — bis dahin bleibt das Mitglied in seiner Woche, damit sie nicht unbesetzt dasteht, falls nie eine Antwort kommt (so steht es auch in [roadmap.md](roadmap.md)).
-- [ ] Kapazitätsprüfung der Zielwoche: weniger als 4 Leute = umtragen, sonst ablehnen und mit Link zur Woche erneut fragen.
-- [ ] Zielwoche anlegen, falls es noch keine Seite gibt.
-- [ ] Falls die alte Woche dadurch unterbesetzt ist: erneut auslosen, mit Ausschluss des gerade Ausgetragenen.
-- [ ] `RESCHEDULE_ENABLED = True` (schaltet den ❌-Hinweis in den DMs frei).
+- [x] ❌ auf der Auslos-DM → Bot fragt per DM nach der Zielwoche (Zahleneingabe).
+- [x] Antwort des Mitglieds aus der DM-Historie lesen und validieren (existierende KW, in der Zukunft, innerhalb der nächsten 10 Zyklen, nicht gesperrt).
+- [x] **Erst bei gültiger Antwort** wird umgetragen — bis dahin bleibt das Mitglied in seiner Woche, damit sie nicht unbesetzt dasteht, falls nie eine Antwort kommt (so steht es auch in [roadmap.md](roadmap.md)).
+- [x] Kapazitätsprüfung der Zielwoche: weniger als 4 Leute = umtragen, sonst ablehnen und mit Link zur Woche erneut fragen.
+- [x] Zielwoche anlegen, falls es noch keine Seite gibt.
+- [x] Falls die alte Woche dadurch unterbesetzt ist: erneut auslosen, mit Ausschluss des gerade Ausgetragenen.
+- [x] `RESCHEDULE_ENABLED = True` (schaltet den ❌-Hinweis in den DMs frei).
+
+Noch nicht live verifiziert: der komplette Reaktions-Durchlauf (dafür fehlen die
+DM-Scopes der Sandbox-App, siehe [sandbox-setup.md](sandbox-setup.md)). Die
+Entscheidungslogik ist offline getestet.
 
 ## Phase 7 — End-to-End-Test im Sandbox-Workspace
 
