@@ -48,8 +48,9 @@ There is no test framework; `tests.py` is a plain script that fakes the Notion/S
 | `USE_TEST_DATA` | `"true"` → use the Notion test copies instead of production |
 | `TEST_DS_B_ID`, `TEST_TEMPLATE_ID` | Required when `USE_TEST_DATA=true`; config aborts rather than silently falling back to production |
 | `TEST_DS_A_ID` | Optional — the Mitgliederliste is only ever read, so the real one is fine for tests |
+| `PUTZPLAN_RELATION_PROP` | Name of the Mitgliederliste→Putzplan relation (default `Putzplan`). A duplicated Putzplan adds a *second* relation property; point this at it when testing. |
 
-In production these come from GitHub Actions secrets. Locally, export them directly — there is no `.env` loader.
+In production these come from GitHub Actions secrets. Locally, copy [.env.example](.env.example) to `.env` — `config.py` loads it via a small built-in parser (no dependency). Real environment variables always win over the file, so CI is unaffected.
 
 ## Module layout
 

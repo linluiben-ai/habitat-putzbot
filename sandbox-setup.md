@@ -42,11 +42,24 @@ Zwei Stufen:
 - **Nur lesen (empfohlen für den Anfang):** echte Notion-IDs, aber `DRY_RUN=true`. Die Auslosung läuft mit echten Mitgliedern und echter Historie durch, es wird nur nichts geschrieben. Realistischstes Bild der Fairness-Logik bei null Risiko.
 - **Auch schreiben:** nur die **Putzplan**-DB duplizieren, die Integration darauf freigeben, und `USE_TEST_DATA=true` mit `TEST_DS_B_ID` + `TEST_TEMPLATE_ID` setzen. `TEST_DS_A_ID` kann leer bleiben — dann wird die echte Mitgliederliste gelesen.
 
-⚠️ **Fallstrick Rückrelation:** Setzt der Bot auf einer Putzplan-Seite die `Mitglieder`-Relation, trägt Notion das automatisch auch auf der Mitglieder-Seite ein. Zeigt die Relation der Putzplan-Kopie auf die **echte** Mitgliederliste, landen Testeinträge also in echten Mitgliederprofilen. Deshalb in der Kopie die Relation auf **einseitig** stellen („Show on Mitgliederliste" aus), bevor der erste Schreiblauf startet.
+### Putzplan duplizieren
 
-⚠️ Nebenwirkung davon: Ohne Rückrelation sieht der Bot bei den Testläufen keine Putzhistorie — alle wirken wie „noch nie geputzt". Zum Prüfen von Seitenerstellung und Status-Updates reicht das; die Fairness-Logik testest du besser mit `DRY_RUN` gegen die echten Daten.
+1. Putzplan-DB öffnen → `⋯` → **Duplicate** (mit Inhalt, damit Views und Templates mitkommen).
+2. Kopie an einen privaten Ort verschieben und eindeutig benennen, z.B. „🧪 Putzplan (Test)".
+3. **Die Kopie für die Notion-Integration freigeben**: auf der Seite `⋯` → *Connections* → die Putzbot-Integration hinzufügen. Wird das vergessen, sieht der Bot die Datenbank schlicht nicht — häufigste Ursache für ein stilles „0 Seiten geladen".
+4. In der Kopie nachsehen, wie die `Mitglieder`-Relation heißt und wohin sie zeigt.
 
-Die vorhandene Kopie „Mitgliederliste (Testdatenbank, inoffiziell!)" stammt aus der Zeit vor `Putzstatus`, `Putzplan` und `Interne Email` — ohne diese drei Properties läuft der Bot dagegen nicht. Entweder nachrüsten oder (einfacher) ignorieren.
+**Zur Rückrelation:** Notion legt für die Kopie eine **zweite** Relations-Property auf der Mitgliederliste an (z.B. `Putzplan (Test)`) — die echte `Putzplan`-Property bleibt davon unberührt. Testläufe können den Produktivbetrieb also nicht durcheinanderbringen; es taucht lediglich eine zusätzliche Spalte in der Mitgliederliste auf.
+
+Damit der Bot beim Testen die *richtige* Historie liest, muss er den Namen dieser zweiten Property kennen:
+
+```
+PUTZPLAN_RELATION_PROP=Putzplan (Test)
+```
+
+Ohne das liest er weiter die echte `Putzplan`-Relation, deren Seiten-IDs in der Testdatenbank nicht existieren — dann wirkt jede:r wie „noch nie geputzt" und jeder Testlauf startet bei null.
+
+Die vorhandene Kopie „Mitgliederliste (Testdatenbank, inoffiziell!)" stammt aus der Zeit vor `Putzstatus`, `Putzplan` und `Interne Email` — ohne diese drei Properties läuft der Bot dagegen nicht. Am einfachsten ignorieren.
 
 ## Schritt 4: Die Betriebsmodi
 
@@ -67,9 +80,19 @@ Zusätzlich lenkt `SLACK_TEST_USER_ID` alle DMs auf dich um (siehe Schritt 2).
 
 ## Schritt 5: Lokal ausführen
 
+Alle Werte kommen in eine `.env` neben `config.py` — die ist in `.gitignore` und wird automatisch geladen. [.env.example](.env.example) als Vorlage kopieren und ausfüllen:
+
 ```bash
-$env:NOTION_TOKEN="..."; $env:SLACK_TOKEN="xoxb-..."; $env:DS_A_ID="..."; $env:DS_B_ID="..."; $env:SLACK_CHANNEL_ID="..."; $env:TEMPLATE_ID="..."; $env:DRY_RUN="true"; $env:DEBUG="true"; $env:FORCE_PLAN="true"; python main.py
+cp .env.example .env
 ```
+
+Dann reicht:
+
+```bash
+python main.py
+```
+
+Echte Umgebungsvariablen haben Vorrang vor der Datei — die GitHub-Action-Secrets bleiben davon also unberührt, und einzelne Werte lassen sich für einen Lauf überschreiben, ohne die Datei anzufassen.
 
 Sinnvolle Reihenfolge beim Hochfahren:
 

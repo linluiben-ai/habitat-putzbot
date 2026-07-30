@@ -12,6 +12,7 @@ from config import (
     EMAIL_DOMAIN,
     HEADERS,
     NOTION_API,
+    PUTZPLAN_RELATION_PROP,
     PUTZSTATUS_ELIGIBLE,
     TEMPLATE_ID,
     WEEK_STATUS_PLANNED,
@@ -293,7 +294,7 @@ def _load_members(filter_payload):
                 "email": email,
                 "eintrittsdatum": eintritt.get("start"),
                 "putzstatus": (_prop(props, "Putzstatus", "select") or {}).get("name"),
-                "putz_page_ids": _relation_ids(props, "Putzplan"),
+                "putz_page_ids": _relation_ids(props, PUTZPLAN_RELATION_PROP),
                 "extra_weeks": [],  # in diesem Lauf vergebene Einsätze, s. raffle.enrich_members
             }
         )
