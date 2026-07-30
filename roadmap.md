@@ -75,7 +75,7 @@ Jede Woche wird die jeweilige Putzcrew benachrichtigt
 	- Mitglied in einer List of Dictionaries speichern mit  `ID`, `Full Name`, `Email`, `Eintrittsdatum`, `Putzstatus` und `Putzplan` 
 - Return: List of Dictionaries
 
-### Build Candidate Pool
+### Build Candidate Pool (Fortsetzung unten, Ausblick am Ende der Datei)
 - Auslöser: Manuell durch andere Prozesse
 - Benötigt: List of Dictionaries mit den Mitgliedern, Dictionary für die Notion Seite
 - %% evtl die Formatierung der Inputvariablen überprüfen %%
@@ -93,3 +93,31 @@ Jede Woche wird die jeweilige Putzcrew benachrichtigt
 	- wird der globale Putzcounter um eins erhöht und `Build Candidate Pool` erneut ausgelöst 
 	- %% rekursiv wäre cool, checke ich aber noch nicht, also maybe einfach den loop copy pasten %%
 - Output: Dictionary mit drei LoDs
+
+---
+
+## Ausblick: nach V3
+
+Bewusst **nicht** Teil von V3, damit die Grundfunktion erst einmal komplett und stabil läuft. Reihenfolge grob nach Nutzen.
+
+### V3.1 — Erinnerungen & Fristen
+- Wer auf die Auslos-DM gar nicht reagiert, bekommt nach einer Weile eine Erinnerung.
+- Offene Frage: Was passiert, wenn bis zur Putzwoche keine Reaktion kommt? Stillschweigend als Zusage werten (aktuelles Verhalten) oder eskalieren?
+- Braucht einen Zeitstempel „wann wurde gefragt" — mit der Polling-Lösung ohnehin schon aus der Slack-Historie ablesbar.
+
+### V3.2 — Buttons statt Emoji-Reaktionen
+- Statt ✅/❌ als Reaktion: echte Slack-Buttons („Passt" / „Woche tauschen") unter der DM.
+- Beim Tauschen keine freie Zahleneingabe mehr, sondern eine Auswahlliste der nächsten sinnvollen Wochen (inkl. Anzeige, wie voll sie schon sind). Das erspart die ganze Validierung von Freitext und macht überfüllte Wochen von vornherein unwählbar.
+- Technisch: Buttons erzeugen `block_actions`-Events. Die kommen **nicht** per Polling an — dafür braucht es Socket Mode oder einen Webhook (siehe webhook-setup.md). Also sinnvollerweise gekoppelt an den Umzug auf Hetzner.
+
+### V3.3 — Slash-Commands / echte Bot-Interaktion
+- `/putzplan` → zeigt die eigene nächste Putzwoche
+- `/putzplan tauschen` → startet den Reschedule-Flow aktiv, ohne auf eine DM warten zu müssen
+- `/putzplan austragen` → setzt den `Putzstatus` auf `Ausgetragen`
+- `/putzplan crew KW 12` → zeigt, wer in einer bestimmten Woche dran ist
+- Ebenfalls Socket-Mode-/Webhook-abhängig (Slash-Commands sind HTTP-Requests von Slack an uns).
+
+### Weitere Ideen
+- `Putzstatus: Priorität` und `Postponed` mit echter Sonderbehandlung statt pauschalem Ausschluss (Priorität = bevorzugt ziehen, Postponed = befristet aussetzen).
+- Direkter Tausch zwischen zwei Mitgliedern („ich nehme deine Woche, du meine").
+- Statistik-Übersicht: wer hat wie oft geputzt, wie fair war die Verteilung übers Jahr.

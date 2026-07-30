@@ -3,7 +3,11 @@
 from slack_sdk.errors import SlackApiError
 
 from config import (
+    CONFIRM_REACTIONS,
+    DECLINE_REACTIONS,
+    DM_HISTORY_LIMIT,
     DRY_RUN,
+    META_AUSLOSUNG,
     RESCHEDULE_ENABLED,
     SLACK_CHANNEL_ID,
     SLACK_TEST_USER_ID,
@@ -62,8 +66,25 @@ def post_channel(text, channel=None):
         return False
 
 
-def send_dm(member, text):
-    """DM an ein Mitglied. Gibt den Message-Timestamp zurück (für spätere Reaktionen)."""
+def dm_channel(member):
+    """DM-Kanal-ID für ein Mitglied (öffnet die Konversation, falls nötig)."""
+    user_id = SLACK_TEST_USER_ID or get_slack_user_id(member.get("email"))
+    if not user_id:
+        return None
+    try:
+        return slack.conversations_open(users=[user_id])["channel"]["id"]
+    except SlackApiError as error:
+        debug(f"conversations_open für {member['name']} fehlgeschlagen: {error.response['error']}")
+        return None
+
+
+def send_dm(member, text, metadata=None):
+    """DM an ein Mitglied. Gibt den Message-Timestamp zurück.
+
+    `metadata` wird als Slack-Message-Metadata angehängt und kommt beim Lesen
+    der Historie strukturiert zurück — so weiß der Poll-Lauf später, auf welche
+    Woche sich eine Reaktion bezieht, ohne den Text parsen zu müssen.
+    """
     if SLACK_TEST_USER_ID:
         text = f"_[Test-DM, eigentlich an {member['name']}]_\n\n{text}"
         user_id = SLACK_TEST_USER_ID
@@ -79,13 +100,70 @@ def send_dm(member, text):
         return None
 
     try:
-        conversation = slack.conversations_open(users=[user_id])
-        response = slack.chat_postMessage(channel=conversation["channel"]["id"], text=text)
+        channel = slack.conversations_open(users=[user_id])["channel"]["id"]
+        kwargs = {"channel": channel, "text": text}
+        if metadata:
+            kwargs["metadata"] = metadata
+        response = slack.chat_postMessage(**kwargs)
         debug(f"DM an {member['name']} gesendet (ts={response['ts']}).")
         return response["ts"]
     except SlackApiError as error:
         print(f"   ❌ Slack-Fehler (DM an {member['name']}): {error.response['error']}")
         return None
+
+
+def read_dm_history(member):
+    """Bot-Nachrichten samt Metadata und Reaktionen aus dem DM-Verlauf lesen.
+
+    Gibt eine Liste von Dicts zurück, neueste zuerst:
+    `{ts, event_type, payload, reaktionen, ist_vom_bot, text}`.
+    """
+    channel = dm_channel(member)
+    if not channel:
+        return []
+
+    try:
+        response = slack.conversations_history(
+            channel=channel, limit=DM_HISTORY_LIMIT, include_all_metadata=True
+        )
+    except SlackApiError as error:
+        debug(f"conversations_history für {member['name']}: {error.response['error']}")
+        return []
+
+    verlauf = []
+    for message in response.get("messages", []):
+        metadata = message.get("metadata") or {}
+        reaktionen = {
+            reaction["name"] for reaction in message.get("reactions", []) or []
+        }
+        verlauf.append(
+            {
+                "ts": message.get("ts"),
+                "text": message.get("text", ""),
+                # bot_id gesetzt = von uns, sonst vom Mitglied geschrieben
+                "ist_vom_bot": bool(message.get("bot_id")),
+                "event_type": metadata.get("event_type"),
+                "payload": metadata.get("event_payload") or {},
+                "reaktionen": reaktionen,
+            }
+        )
+    return verlauf
+
+
+def reaktion_auf(eintrag):
+    """'ja' / 'nein' / None — was hat das Mitglied auf diese Nachricht geklickt?"""
+    if eintrag["reaktionen"] & DECLINE_REACTIONS:
+        return "nein"
+    if eintrag["reaktionen"] & CONFIRM_REACTIONS:
+        return "ja"
+    return None
+
+
+def auslosung_metadata(member, kw, year):
+    return {
+        "event_type": META_AUSLOSUNG,
+        "event_payload": {"kw": kw, "jahr": year, "mitglied": member["id"]},
+    }
 
 
 def _indent(text):
@@ -106,7 +184,9 @@ def build_draw_dm(member, kw, page_url):
             "\n\nPasst dir die Woche?\n"
             "✅ = passt, ich bin dabei\n"
             "❌ = ich möchte in einer anderen Woche putzen\n\n"
-            "Reagier einfach mit dem passenden Emoji auf diese Nachricht."
+            "Reagier einfach mit dem passenden Emoji auf diese Nachricht. "
+            "Ich schaue mehrmals am Tag nach, es kann also ein paar Stunden dauern, "
+            "bis ich mich melde."
         )
     else:
         text += (
@@ -131,6 +211,47 @@ def build_reminder(kw, crew, page_url):
             f"🧹 *Putzplan KW {kw}* 🧹\n\n"
             f"Diese Woche seid ihr dran: {mention_list(crew)} 💚"
         )
+    if page_url:
+        text += f"\n\n👉 <{page_url}|Zur Woche in Notion>"
+    return text
+
+
+def build_reschedule_frage(member, kw, max_kw_hinweis):
+    """Nachfrage, nachdem jemand mit ❌ reagiert hat."""
+    return (
+        f"Alles klar {vorname(member)}, KW {kw} passt dir also nicht. 👍\n\n"
+        f"In welcher Woche möchtest du stattdessen putzen?\n"
+        f"Antworte einfach mit der Kalenderwoche als Zahl, z.B. `{max_kw_hinweis}`.\n\n"
+        f"_Du bleibst so lange in KW {kw} eingetragen, bis du dich für eine neue Woche "
+        f"entschieden hast — damit die Woche nicht plötzlich unbesetzt ist._"
+    )
+
+
+def build_reschedule_ok(member, alte_kw, neue_kw, page_url):
+    text = (
+        f"Erledigt! Du bist jetzt statt in KW {alte_kw} in *KW {neue_kw}* eingetragen. ✅"
+    )
+    if page_url:
+        text += f"\n\n👉 <{page_url}|Zur neuen Woche in Notion>"
+    return text
+
+
+def build_reschedule_fehler(member, eingabe, grund, max_kw_hinweis):
+    return (
+        f"Hm, mit `{eingabe}` kann ich nichts anfangen: {grund}\n\n"
+        f"Antworte bitte nochmal mit einer Kalenderwoche als Zahl, z.B. "
+        f"`{max_kw_hinweis}`."
+    )
+
+
+def build_woche_voll_info(kw, anzahl, page_url):
+    """Info an die Crew, wenn eine Woche durch einen Tausch überbesetzt ist."""
+    text = (
+        f"🧹 Kleine Info zu *KW {kw}*: ihr seid jetzt zu {anzahl}. "
+        f"Das ist mehr als die üblichen 4 — schön, aber nicht nötig.\n\n"
+        f"Wer lieber in einer anderen Woche putzen möchte, reagiert einfach mit ❌ "
+        f"auf seine Auslos-Nachricht, dann suchen wir eine neue Woche."
+    )
     if page_url:
         text += f"\n\n👉 <{page_url}|Zur Woche in Notion>"
     return text

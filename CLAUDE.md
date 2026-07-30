@@ -65,7 +65,8 @@ In production these come from GitHub Actions secrets. Locally, copy [.env.exampl
 | [notion.py](notion.py) | Every Notion call: paginated queries, week lookup, member loading, writes. |
 | [raffle.py](raffle.py) | Candidate-pool tiers and the draw itself. |
 | [slack_utils.py](slack_utils.py) | User lookup, sending, and all message texts. |
-| [scheduler.py](scheduler.py) | The two scheduled processes: `remind_current_week` and `plan_next_cycle`. |
+| [scheduler.py](scheduler.py) | Scheduled processes (`remind_current_week`, `plan_next_cycle`) plus `fill_week`, the shared draw-write-notify step. |
+| [reschedule.py](reschedule.py) | Poll for ✅/❌ reactions and move members between weeks. |
 
 `cycles.py` is separate from `scheduler.py` because both `raffle.py` and `scheduler.py` need week math; folding it in would create an import cycle.
 
@@ -91,6 +92,20 @@ Two rules that are easy to break by accident:
 The 2-new/2-old mix (`ist_neu` = joined less than a year ago) is the weakest criterion and only applies when sampling within the final tier, counting members already on the page.
 
 `enrich_members` must be re-run per target week — distances are relative to the week being planned. Crews drawn earlier in the same run are tracked in `member["extra_weeks"]`, because the Notion relation is stale until the run finishes.
+
+## How the reschedule flow works
+
+There is **no webhook server**. `python main.py poll` runs several times a day (`.github/workflows/poll_reactions.yml`) and asks Slack whether anyone reacted. Socket Mode replaces this later (Phase 9); the state handling below is identical either way.
+
+The mapping *DM message → (member, week)* lives in **Slack message metadata** (`chat_postMessage(metadata=…)`, read back via `conversations_history(include_all_metadata=True)`). That is why no external store is needed — requires `slack-sdk>=3.21`.
+
+`reschedule.naechster_zustand` decides what to do from the DM history, and the rule that makes it safe is: **the newest bot message wins, even if it carries no metadata.** A confirmation ("Erledigt, du bist jetzt in KW 22") therefore terminates the scan. Without that, the loop would skip past the untagged confirmation, re-find the older question plus answer, and execute the same move a second time on every poll. There is a regression test for it.
+
+Two consequences worth remembering:
+- After the bot asks a question, that question is the newest message, so the original ❌ is not reprocessed. Idempotency comes from message ordering, not from stored flags.
+- An invalid reply is answered with a *new* question carrying `META_FRAGE`, which re-anchors the scan. That is what stops the bot from replying to the same nonsense on every poll.
+
+A member is only removed from their old week once a **valid** target week is confirmed — otherwise a week could silently end up understaffed when someone declines and never answers.
 
 ## Working notes
 

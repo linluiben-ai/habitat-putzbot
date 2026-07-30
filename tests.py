@@ -21,6 +21,7 @@ config.DEBUG = False
 import cycles  # noqa: E402
 import notion  # noqa: E402
 import raffle  # noqa: E402
+import reschedule  # noqa: E402
 import scheduler  # noqa: E402
 import slack_utils  # noqa: E402
 
@@ -184,7 +185,7 @@ def test_plan_flow():
     )
     slack_utils.get_slack_user_id = lambda email: f"U{email.split('@')[0].upper()}" if email else None
     slack_utils.post_channel = lambda text, channel=None: True
-    slack_utils.send_dm = lambda m, text: "123.456"
+    slack_utils.send_dm = lambda m, text, metadata=None: "123.456"
 
     try:
         members = [member(f"N{i}", new=True) for i in range(10)] + [member(f"A{i}") for i in range(10)]
@@ -237,11 +238,210 @@ def test_plan_flow():
         ) = original
 
 
+def bot_msg(event_type=None, payload=None, reaktionen=(), ts="1", text=""):
+    return {"ts": ts, "text": text, "ist_vom_bot": True, "event_type": event_type,
+            "payload": payload or {}, "reaktionen": set(reaktionen)}
+
+
+def user_msg(text, ts="2"):
+    return {"ts": ts, "text": text, "ist_vom_bot": False, "event_type": None,
+            "payload": {}, "reaktionen": set()}
+
+
+def test_reschedule_logik():
+    print("\n=== Reschedule: Eingaben parsen ===")
+    check("nackte Zahl", reschedule.parse_wochennummer("22"), 22)
+    check("mit Präfix", reschedule.parse_wochennummer("KW 22"), 22)
+    check("im Satz", reschedule.parse_wochennummer("ich würde gerne in 22 putzen"), 22)
+    check("ohne Zahl", reschedule.parse_wochennummer("keine Ahnung"), None)
+    check("unmögliche KW", reschedule.parse_wochennummer("99"), None)
+    check("leer", reschedule.parse_wochennummer(""), None)
+
+    print("\n=== Reschedule: Zielwoche bestimmen ===")
+    # Stand KW 31/2026 (2026 hat 53 Wochen)
+    check("spätere KW -> selbes Jahr",
+          reschedule.zielwoche_bestimmen(35, 31, 2026)[0], (35, 2026))
+    check("frühere KW -> Folgejahr",
+          reschedule.zielwoche_bestimmen(5, 31, 2026)[0], (5, 2027))
+    check("KW 53 in 53-Wochen-Jahr geht",
+          reschedule.zielwoche_bestimmen(53, 31, 2026)[0], (53, 2026))
+    # Stand KW 31/2027 (2027 hat nur 52) -> KW 53 gäbe es erst 2028, das hat auch keine
+    check("KW 53 in 52-Wochen-Jahr wird abgelehnt",
+          reschedule.zielwoche_bestimmen(53, 31, 2027)[0], None)
+    # Jahreswechsel, der tatsächlich in Reichweite liegt: KW 50/2026 -> KW 5/2027
+    check("Jahreswechsel in Reichweite",
+          reschedule.zielwoche_bestimmen(5, 50, 2026)[0], (5, 2027))
+    # Dieselbe KW landet im Folgejahr und ist damit ~52 Wochen weg -> zu weit
+    check("dieselbe KW ist zu weit weg",
+          reschedule.zielwoche_bestimmen(31, 31, 2026)[0], None)
+    check("... mit passender Begründung",
+          "Zyklen" in reschedule.zielwoche_bestimmen(31, 31, 2026)[1], True)
+    check("zu weit weg wird abgelehnt",
+          reschedule.zielwoche_bestimmen(30, 31, 2026)[0], None)
+    check("Vergangenheit wird abgelehnt",
+          reschedule.zielwoche_bestimmen(31, 31, 2026)[0], None)
+    check("Unsinn wird abgelehnt", reschedule.zielwoche_bestimmen(None, 31, 2026)[0], None)
+
+    print("\n=== Reschedule: Kapazität ===")
+    check("3 Leute -> ok", reschedule.kapazitaets_entscheidung(3), "ok")
+    check("4 Leute -> ok", reschedule.kapazitaets_entscheidung(4), "ok")
+    check("5 Leute -> Crew informieren", reschedule.kapazitaets_entscheidung(5), "info")
+    check("6 Leute -> ablehnen", reschedule.kapazitaets_entscheidung(6), "abgelehnt")
+    check("7 Leute -> ablehnen", reschedule.kapazitaets_entscheidung(7), "abgelehnt")
+
+    print("\n=== Reschedule: Zustand aus dem DM-Verlauf ===")
+    aktuell = {(5, 2027)}
+    auslosung = bot_msg(config.META_AUSLOSUNG, {"kw": 5, "jahr": 2027}, ["x"])
+
+    check("❌ auf Auslosung -> Absage",
+          reschedule.naechster_zustand([auslosung], aktuell), ("absage", (5, 2027)))
+    check("✅ auf Auslosung -> nichts",
+          reschedule.naechster_zustand(
+              [bot_msg(config.META_AUSLOSUNG, {"kw": 5, "jahr": 2027}, ["white_check_mark"])],
+              aktuell)[0], None)
+    check("keine Reaktion -> nichts",
+          reschedule.naechster_zustand(
+              [bot_msg(config.META_AUSLOSUNG, {"kw": 5, "jahr": 2027})], aktuell)[0], None)
+    check("❌ zu einer Woche, in der man nicht mehr steht -> nichts",
+          reschedule.naechster_zustand([auslosung], {(9, 2027)})[0], None)
+
+    frage = bot_msg(config.META_FRAGE, {"kw": 5, "jahr": 2027}, ts="10")
+    check("Frage ohne Antwort -> nichts",
+          reschedule.naechster_zustand([frage, auslosung], aktuell)[0], None)
+    check("Frage mit Antwort -> Antwort",
+          reschedule.naechster_zustand([user_msg("22"), frage, auslosung], aktuell),
+          ("antwort", ("22", (5, 2027))))
+
+    # Der Anker: haben wir schon gefragt, wird dieselbe Absage nicht nochmal bearbeitet
+    check("nach dem Nachfragen greift die alte ❌ nicht erneut",
+          reschedule.naechster_zustand([frage, auslosung], aktuell)[0], None)
+    # Und nach unserer Bestätigung ist ebenfalls Ruhe
+    check("gewöhnliche Bot-Nachricht danach stoppt die Verarbeitung",
+          reschedule.naechster_zustand(
+              [bot_msg(None, None, [], ts="11"), user_msg("22"), frage, auslosung],
+              aktuell)[0], None)
+
+
+def _fake_slack_notion(writes, dms, verlauf_pro_mitglied):
+    """Notion- und Slack-Aufrufe durch Rekorder ersetzen. Gibt ein Restore-Callable zurück."""
+    original = {
+        "update": notion.update_page_members,
+        "status": notion.set_week_status,
+        "create": notion.create_week_page,
+        "uid": slack_utils.get_slack_user_id,
+        "post": slack_utils.post_channel,
+        "dm": slack_utils.send_dm,
+        "hist": slack_utils.read_dm_history,
+    }
+    notion.update_page_members = lambda pid, ids: writes.append(("update", pid, list(ids))) or True
+    notion.set_week_status = lambda pid, s: writes.append(("status", pid, s)) or True
+    notion.create_week_page = lambda kw, jahr, ids, status="Geplant": (
+        writes.append(("create", kw, jahr, list(ids), status))
+        or (f"page-{kw}-{jahr}", f"https://notion.so/kw{kw}")
+    )
+    slack_utils.get_slack_user_id = lambda email: "U1"
+    slack_utils.post_channel = lambda text, channel=None: True
+    slack_utils.send_dm = lambda m, text, metadata=None: (
+        dms.append((m["id"], (metadata or {}).get("event_type"), text)) or "9.9"
+    )
+    slack_utils.read_dm_history = lambda m: verlauf_pro_mitglied.get(m["id"], [])
+
+    def restore():
+        notion.update_page_members = original["update"]
+        notion.set_week_status = original["status"]
+        notion.create_week_page = original["create"]
+        slack_utils.get_slack_user_id = original["uid"]
+        slack_utils.post_channel = original["post"]
+        slack_utils.send_dm = original["dm"]
+        slack_utils.read_dm_history = original["hist"]
+
+    return restore
+
+
+def _poll_szenario(verlauf, ziel_woche_belegung=None):
+    """Baut eine Welt mit KW 35/2026 (4 Leute) und laesst run_poll darueber laufen."""
+    members = [member(f"M{i}", new=(i % 2 == 0)) for i in range(12)]
+    lookup = {m["id"]: m for m in members}
+
+    kw35 = {"page_id": "p35", "page_url": "u35", "kw": 35, "year": 2026,
+            "member_ids": ["M0", "M1", "M2", "M3"], "member_count": 4,
+            "status": "Crew voll", "archiv": False}
+    week_pages = {"by_week": {(35, 2026): kw35}, "by_page_id": {"p35": kw35}}
+
+    if ziel_woche_belegung is not None:
+        kw40 = {"page_id": "p40", "page_url": "u40", "kw": 40, "year": 2026,
+                "member_ids": list(ziel_woche_belegung),
+                "member_count": len(ziel_woche_belegung),
+                "status": "Geplant", "archiv": False}
+        week_pages["by_week"][(40, 2026)] = kw40
+        week_pages["by_page_id"]["p40"] = kw40
+
+    writes, dms = [], []
+    restore = _fake_slack_notion(writes, dms, {"M0": verlauf})
+    try:
+        reschedule.run_poll(week_pages, members, lookup, 31, 2026)
+    finally:
+        restore()
+    return writes, dms, week_pages
+
+
+def test_poll_flow():
+    print("\n=== Poll: Absage wird zur Nachfrage ===")
+    auslosung = bot_msg(config.META_AUSLOSUNG, {"kw": 35, "jahr": 2026}, ["x"])
+    writes, dms, _ = _poll_szenario([auslosung])
+    check("keine Notion-Schreibzugriffe", writes, [])
+    check("genau eine DM", len(dms), 1)
+    check("DM ist die Nachfrage", dms[0][1], config.META_FRAGE)
+
+    print("\n=== Poll: Antwort traegt um ===")
+    frage = bot_msg(config.META_FRAGE, {"kw": 35, "jahr": 2026}, ts="10")
+    writes, dms, week_pages = _poll_szenario([user_msg("40"), frage, auslosung])
+
+    updates = [w for w in writes if w[0] == "update" and w[1] == "p35"]
+    check("alte Woche wurde geschrieben", len(updates) >= 1, True)
+    check("M0 ist aus KW 35 raus", "M0" in updates[0][2], False)
+    creates = [w for w in writes if w[0] == "create"]
+    check("Zielwoche wurde angelegt", len(creates), 1)
+    check("... als KW 40/2026", (creates[0][1], creates[0][2]), (40, 2026))
+    check("... mit M0 drin", creates[0][3], ["M0"])
+    check("Bestaetigung an M0", any(d[0] == "M0" and d[1] is None for d in dms), True)
+
+    # Nach dem Austragen ist KW 35 unterbesetzt -> es muss nachgelost werden
+    nachgelost = [d for d in dms if d[1] == config.META_AUSLOSUNG]
+    check("es wurde nachgelost", len(nachgelost), 1)
+    check("M0 wurde nicht erneut gezogen", nachgelost[0][0] == "M0", False)
+    check("KW 35 ist wieder voll",
+          week_pages["by_week"][(35, 2026)]["member_count"], 4)
+
+    print("\n=== Poll: volle Zielwoche wird abgelehnt ===")
+    writes, dms, _ = _poll_szenario([user_msg("40"), frage, auslosung],
+                                    ziel_woche_belegung=["A", "B", "C", "D", "E"])
+    check("nichts umgetragen", [w for w in writes if w[0] == "update"], [])
+    check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
+    check("Begruendung nennt die Belegung", "5" in dms[0][2], True)
+
+    print("\n=== Poll: 5 Leute -> umtragen und Crew informieren ===")
+    writes, dms, _ = _poll_szenario([user_msg("40"), frage, auslosung],
+                                    ziel_woche_belegung=["M5", "M6", "M7", "M9"])
+    ziel_updates = [w for w in writes if w[0] == "update" and w[1] == "p40"]
+    check("Zielwoche wurde geschrieben", len(ziel_updates), 1)
+    check("M0 ist drin", "M0" in ziel_updates[0][2], True)
+    infos = [d for d in dms if d[0] in ("M5", "M6", "M7", "M9")]
+    check("bestehende Crew wurde informiert", len(infos), 4)
+
+    print("\n=== Poll: Unsinn fuehrt zu erneuter Nachfrage ===")
+    writes, dms, _ = _poll_szenario([user_msg("weiss nicht"), frage, auslosung])
+    check("nichts umgetragen", [w for w in writes if w[0] == "update"], [])
+    check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
+
+
 def main():
     test_cycles()
     test_raffle()
     test_enrich()
     test_plan_flow()
+    test_reschedule_logik()
+    test_poll_flow()
 
     print("\n" + "=" * 50)
     if FAILS:

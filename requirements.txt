@@ -1,2 +1,5 @@
 requests
-slack-sdk
+# >=3.21 wegen Message-Metadata (chat_postMessage(metadata=...) und
+# conversations_history(include_all_metadata=True)) — darauf baut der
+# Reschedule-Flow auf.
+slack-sdk>=3.21

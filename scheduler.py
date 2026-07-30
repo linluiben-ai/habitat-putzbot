@@ -6,7 +6,6 @@ import raffle
 import slack_utils
 from config import (
     CREW_SIZE,
-    DRY_RUN,
     WEEK_STATUS_BLOCKED,
     WEEK_STATUS_DONE,
     WEEK_STATUS_FULL,
@@ -24,9 +23,86 @@ def _is_untouchable(week):
     return None
 
 
-def _crew_from_ids(member_ids, lookup):
+def crew_from_ids(member_ids, lookup):
     """Mitglieder-Dicts zu Relations-IDs, unbekannte IDs werden übersprungen."""
     return [lookup[mid] for mid in member_ids if mid in lookup]
+
+
+def status_fuer(anzahl):
+    """Welchen Notion-Status soll eine Woche mit so vielen Leuten haben?"""
+    return WEEK_STATUS_FULL if anzahl >= CREW_SIZE else WEEK_STATUS_PLANNED
+
+
+def setze_status(week, anzahl):
+    """Status nachziehen, aber 'Erledigt'/'Nicht auswählen' nicht überschreiben."""
+    if week["status"] in (None, WEEK_STATUS_PLANNED, WEEK_STATUS_FULL):
+        notion.set_week_status(week["page_id"], status_fuer(anzahl))
+
+
+def cache_week(week_pages, entry):
+    """Lokalen Wochen-Cache nachziehen, damit spätere Schritte im selben Lauf
+    nicht mit veralteten Belegungen weiterrechnen."""
+    week_pages["by_week"][(entry["kw"], entry["year"])] = entry
+    if entry.get("page_id"):
+        week_pages["by_page_id"][entry["page_id"]] = entry
+    return entry
+
+
+def fill_week(week, members, week_pages, lookup, exclude_ids=()):
+    """Eine Woche auffüllen: auslosen, nach Notion schreiben, DMs verschicken.
+
+    Gemeinsam genutzt von der Zyklusplanung und vom Nachlosen nach einem
+    Tausch. Gibt (crew, page_url, selected) zurück.
+    """
+    needed = CREW_SIZE - week["member_count"]
+
+    # Abstände hängen von der Zielwoche ab -> pro Woche neu berechnen
+    raffle.enrich_members(members, week_pages, week["kw"], week["year"])
+    selected = raffle.select_crew(members, week, needed, exclude_ids=exclude_ids)
+
+    if selected:
+        print(f"   🎲 Ausgelost: {', '.join(m['name'] for m in selected)}")
+    elif needed > 0:
+        print("   ⚠️ Niemand ausgelost.")
+    else:
+        print("   ✅ Crew ist schon vollzählig.")
+
+    all_ids = week["member_ids"] + [m["id"] for m in selected]
+    page_url = week["page_url"]
+
+    if week["page_status"] == "exists":
+        if selected:
+            notion.update_page_members(week["page_id"], all_ids)
+            setze_status(week, len(all_ids))
+            cache_week(week_pages, dict(week, member_ids=all_ids,
+                                        member_count=len(all_ids),
+                                        status=status_fuer(len(all_ids))))
+    else:
+        new_id, new_url = notion.create_week_page(
+            week["kw"], week["year"], all_ids, status=status_fuer(len(all_ids))
+        )
+        page_url = new_url
+        if new_id:
+            cache_week(week_pages, {
+                "page_id": new_id, "page_url": new_url,
+                "kw": week["kw"], "year": week["year"],
+                "member_ids": all_ids, "member_count": len(all_ids),
+                "status": status_fuer(len(all_ids)), "archiv": False,
+            })
+
+    # Damit spätere Wochen im selben Lauf wissen, dass diese Leute verplant sind
+    for member in selected:
+        member["extra_weeks"].append((week["kw"], week["year"]))
+
+    for member in selected:
+        slack_utils.send_dm(
+            member,
+            slack_utils.build_draw_dm(member, week["kw"], page_url),
+            metadata=slack_utils.auslosung_metadata(member, week["kw"], week["year"]),
+        )
+
+    crew = crew_from_ids(week["member_ids"], lookup) + selected
+    return crew, page_url, selected
 
 
 def remind_current_week(week_pages, lookup, kw, year):
@@ -44,7 +120,7 @@ def remind_current_week(week_pages, lookup, kw, year):
         print("   ⚠️ Für diese Woche existiert keine Notion-Seite — keine Erinnerung verschickt.")
         return
 
-    crew = _crew_from_ids(week["member_ids"], lookup)
+    crew = crew_from_ids(week["member_ids"], lookup)
     slack_utils.post_channel(slack_utils.build_reminder(kw, crew, week["page_url"]))
 
 
@@ -70,63 +146,14 @@ def plan_next_cycle(week_pages, members, lookup, kw, year):
             print("   ⏭️ Übersprungen (bereits erledigt).")
             continue
 
-        needed = CREW_SIZE - week["member_count"]
-        print(f"   Bereits eingetragen: {week['member_count']} — benötigt: {max(0, needed)}")
+        print(f"   Bereits eingetragen: {week['member_count']} — "
+              f"benötigt: {max(0, CREW_SIZE - week['member_count'])}")
 
-        # Abstände hängen von der Zielwoche ab -> pro Woche neu berechnen
         raffle.enrich_members(members, week_pages, week_kw, week_year)
         for line in raffle.describe_candidates(members, week):
             debug(line.strip())
 
-        selected = raffle.select_crew(members, week, needed)
-
-        if selected:
-            print(f"   🎲 Ausgelost: {', '.join(m['name'] for m in selected)}")
-        elif needed > 0:
-            print("   ⚠️ Niemand ausgelost.")
-        else:
-            print("   ✅ Crew ist schon vollzählig.")
-
-        all_ids = week["member_ids"] + [m["id"] for m in selected]
-        final_status = WEEK_STATUS_FULL if len(all_ids) >= CREW_SIZE else WEEK_STATUS_PLANNED
-
-        page_url = week["page_url"]
-
-        if week["page_status"] == "exists":
-            if selected:
-                notion.update_page_members(week["page_id"], all_ids)
-                if week["status"] in (None, WEEK_STATUS_PLANNED, WEEK_STATUS_FULL):
-                    notion.set_week_status(week["page_id"], final_status)
-        else:
-            new_id, new_url = notion.create_week_page(
-                week_kw, week_year, all_ids, status=final_status
-            )
-            page_url = new_url
-            if new_id:
-                # Lokalen Cache nachziehen, damit spätere Wochen den Stand kennen
-                entry = {
-                    "page_id": new_id,
-                    "page_url": new_url,
-                    "kw": week_kw,
-                    "year": week_year,
-                    "member_ids": all_ids,
-                    "member_count": len(all_ids),
-                    "status": final_status,
-                    "archiv": False,
-                }
-                week_pages["by_week"][(week_kw, week_year)] = entry
-                week_pages["by_page_id"][new_id] = entry
-
-        # Damit die nächste Woche im Loop weiß, dass diese Leute schon verplant sind
-        for member in selected:
-            member["extra_weeks"].append((week_kw, week_year))
-
-        for member in selected:
-            slack_utils.send_dm(
-                member, slack_utils.build_draw_dm(member, week_kw, page_url)
-            )
-
-        crew = _crew_from_ids(week["member_ids"], lookup) + selected
+        crew, page_url, _ = fill_week(week, members, week_pages, lookup)
         summary.append((week_kw, crew, page_url))
 
     if summary:

@@ -1,29 +1,29 @@
-name: Putzplan Automation
+name: Putzplan Reaktionen prüfen
+
+# Schaut nach, ob jemand mit ✅/❌ auf seine Auslos-DM reagiert hat, und
+# wickelt Tauschwünsche ab. Ersetzt den Webhook-Server: der Bot fragt aktiv
+# nach, statt sich von Slack anrufen zu lassen.
 
 on:
   schedule:
-    # GitHub Actions Cron läuft in UTC.
-    # '0 8 * * 1' bedeutet: montags um 08:00 UTC.
-    - cron: '0 8 * * 1'
+    # Cron läuft in UTC. Diese Zeiten entsprechen etwa 08/11/14/17/20 Uhr (MEZ)
+    # bzw. 09/12/15/18/21 Uhr (MESZ) — also den Wachzeiten.
+    - cron: '0 7,10,13,16,19 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry Run — nichts in Notion/Slack schreiben'
+        description: 'Dry Run — nichts schreiben, nur anzeigen'
         type: boolean
         default: false
       debug:
-        description: 'Debug — ausführliche Diagnose-Ausgaben'
-        type: boolean
-        default: false
-      force_plan:
-        description: 'Plan-Lauf erzwingen (auch außerhalb der letzten Zykluswoche)'
+        description: 'Debug — ausführliche Diagnose'
         type: boolean
         default: false
 
 jobs:
-  run-putzbot:
+  poll:
     runs-on: ubuntu-latest
-    # Nicht gleichzeitig mit dem Poll-Workflow schreiben.
+    # Zwei Läufe gleichzeitig könnten dieselbe Reaktion doppelt bearbeiten.
     concurrency:
       group: putzbot-schreibzugriff
       cancel-in-progress: false
@@ -43,10 +43,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Tests
-        run: python tests.py
-
-      - name: Skript ausführen
+      - name: Reaktionen prüfen
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -56,5 +53,4 @@ jobs:
           TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
           DRY_RUN: ${{ inputs.dry_run }}
           DEBUG: ${{ inputs.debug }}
-          FORCE_PLAN: ${{ inputs.force_plan }}
-        run: python main.py
+        run: python main.py poll

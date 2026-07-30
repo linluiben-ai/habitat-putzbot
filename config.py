@@ -53,6 +53,14 @@ TEST_DS_A_ID = os.environ.get("TEST_DS_A_ID")
 TEST_DS_B_ID = os.environ.get("TEST_DS_B_ID")
 TEST_TEMPLATE_ID = os.environ.get("TEST_TEMPLATE_ID")
 
+# Name der Relation von der Mitgliederliste zum Putzplan.
+# Eine duplizierte Putzplan-DB legt auf der Mitgliederliste eine ZWEITE
+# Relations-Property an; die echte bleibt unberührt. Beim Testen muss der Bot
+# die Kopie lesen, sonst sieht er die Einsätze aus den Testläufen nicht und
+# lost jedes Mal aus einem "noch nie geputzt"-Zustand.
+PUTZPLAN_RELATION_PROP = os.environ.get("PUTZPLAN_RELATION_PROP", "Putzplan")
+TEST_PUTZPLAN_RELATION_PROP = os.environ.get("TEST_PUTZPLAN_RELATION_PROP", "Putztest")
+
 if USE_TEST_DATA:
     # DS_B (Putzplan) und Template MÜSSEN Kopien sein — das ist die einzige
     # Datenbank, in die der Bot schreibt. Kein stiller Fallback auf die echten
@@ -69,15 +77,11 @@ if USE_TEST_DATA:
     # DS_A (Mitgliederliste) ist optional: der Bot liest daraus nur, er schreibt
     # nie hinein. Ohne Kopie wird also einfach die echte Liste gelesen.
     DS_A_ID = TEST_DS_A_ID or DS_A_ID
+    # Gehört zwingend zur Testkopie dazu — sonst liest der Bot die echte
+    # Putzhistorie, deren Seiten-IDs es in der Kopie gar nicht gibt.
+    PUTZPLAN_RELATION_PROP = TEST_PUTZPLAN_RELATION_PROP
 
 DATENQUELLE = "🧪 TESTKOPIE" if USE_TEST_DATA else "🔴 PRODUKTIV"
-
-# Name der Relation von der Mitgliederliste zum Putzplan.
-# Eine duplizierte Putzplan-DB legt auf der Mitgliederliste eine ZWEITE
-# Relations-Property an (z.B. "Putzplan (Test)"); die echte bleibt unberührt.
-# Beim Testen muss der Bot die Kopie lesen, sonst sieht er die Einsätze aus
-# den Testläufen nicht und lost jedes Mal aus einem "noch nie geputzt"-Zustand.
-PUTZPLAN_RELATION_PROP = os.environ.get("PUTZPLAN_RELATION_PROP", "Putzplan")
 
 # Zum Testen: wenn gesetzt, gehen ALLE DMs an diese Slack-User-ID statt an die
 # echten Mitglieder. Im Sandbox-Workspace stimmen die E-Mail-Adressen sonst
@@ -150,11 +154,28 @@ WEEK_STATUS_PLANNED = "Geplant"
 WEEK_STATUS_FULL = "Crew voll"
 WEEK_STATUS_DONE = "Erledigt"
 
-# --- Reschedule (Phase 6, hier nur vorkonfiguriert) ---
-RESCHEDULE_ENABLED = False    # solange False: keine ❌-Option in den DMs
+# --- Reschedule ---
+RESCHEDULE_ENABLED = True     # False: keine ❌-Option in den DMs
 RESCHEDULE_MAX_CYCLES_AHEAD = 10
-RESCHEDULE_ASK_AT = 5         # ab so vielen Leuten: Crew fragen, ob jemand tauscht
+RESCHEDULE_ASK_AT = 5         # ab so vielen Leuten: Crew informieren, dass getauscht werden könnte
 RESCHEDULE_DENY_AT = 6        # ab so vielen Leuten: Zielwoche ablehnen
+
+# Emoji-Namen, wie Slack sie liefert (ohne Doppelpunkte). Mehrere Varianten,
+# weil Leute nicht zuverlässig dasselbe Häkchen bzw. Kreuz erwischen.
+CONFIRM_REACTIONS = frozenset(
+    {"white_check_mark", "heavy_check_mark", "ballot_box_with_check", "+1", "thumbsup"}
+)
+DECLINE_REACTIONS = frozenset(
+    {"x", "negative_squared_cross_mark", "heavy_multiplication_x", "-1", "thumbsdown"}
+)
+
+# Slack-Message-Metadata: hängt strukturiert an der Nachricht und kommt beim
+# Lesen der Historie wieder mit zurück. Dadurch braucht die Zuordnung
+# "welche DM gehört zu welcher Woche" keinen eigenen Speicher.
+META_AUSLOSUNG = "putzbot_auslosung"
+META_FRAGE = "putzbot_reschedule_frage"
+
+DM_HISTORY_LIMIT = 30         # so viele Nachrichten pro DM-Verlauf ansehen
 
 slack = WebClient(token=SLACK_TOKEN)
 

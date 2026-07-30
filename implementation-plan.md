@@ -71,35 +71,46 @@ Templates: „Neue Putzcrew (Automation)" `2eab71ac-7d09-80ef-954f-d3e298915dfe`
 - [x] Wöchentliche Erinnerung mit @-Erwähnungen der Crew in den Zielkanal.
 - [x] Läuft jeden Montag, unabhängig vom Plan-Lauf.
 
-## Phase 5 — Webhook-Service
+## Phase 5 — Reaktionen per Polling (statt Webhook)
 
-- [ ] [webhook-setup.md](webhook-setup.md) Schritte 1–4 durchgehen (Flask, Render-Deploy, Slack-Event-Subscription, End-to-End bis Log-Print).
-- [ ] Erst wenn Reaktionen zuverlässig ankommen, weiter zu Phase 6.
+**Entscheidung:** Kein Webhook-Server für V3. Der Bot fragt stattdessen mehrmals täglich bei Slack nach, ob jemand auf seine DMs reagiert hat. Begründung: Ausgelost wird 4 Wochen im Voraus, ein paar Stunden Reaktionszeit sind völlig ausreichend — und dafür entfallen Server, öffentliche URL, HTTPS und Hosting komplett. Läuft weiter auf GitHub Actions.
+
+Der Umzug auf Socket Mode (dauerhafte WebSocket-Verbindung, Reaktionen in Sekunden) kommt mit dem Hetzner-Server, siehe Phase 9. Der Zustands-/Zuordnungsteil ist bei beiden Varianten identisch, der Wechsel betrifft nur die Zustellung.
+
+- [ ] Zuordnung DM ↔ (Mitglied, KW, Jahr) über **Slack-Message-Metadata** — kein externer Speicher nötig, die Info hängt an der Nachricht selbst.
+- [ ] Eigener Workflow `poll_reactions.yml`, mehrmals täglich zu Wachzeiten.
+- [ ] `python main.py poll` als eigener Modus neben dem wöchentlichen Lauf.
 
 ## Phase 6 — `reschedule.py`
 
-- [ ] Mapping DM-Message-`ts` → (Mitglied, KW, Jahr) persistieren, damit der Webhook die Reaktion zuordnen kann.
-- [ ] ❌ → Mitglied aus der Woche austragen, per PM nach Zielwoche fragen (Zahleneingabe), Validierung „innerhalb der nächsten 10 Zyklen".
-- [ ] Kapazitätsprüfung der Zielwoche (1–4 / 5 / ≥6, s.o.) und Anlegen der Zielwoche falls nicht vorhanden.
-- [ ] Falls alte Woche dadurch unterbesetzt: `Raffle` für sie erneut, mit Ausschluss des gerade ausgetragenen Mitglieds.
-- [ ] `RESCHEDULE_ENABLED = True` setzen (schaltet den ❌-Hinweis in den DMs frei).
+- [ ] ❌ auf der Auslos-DM → Bot fragt per DM nach der Zielwoche (Zahleneingabe).
+- [ ] Antwort des Mitglieds aus der DM-Historie lesen und validieren (existierende KW, in der Zukunft, innerhalb der nächsten 10 Zyklen, nicht gesperrt).
+- [ ] **Erst bei gültiger Antwort** wird umgetragen — bis dahin bleibt das Mitglied in seiner Woche, damit sie nicht unbesetzt dasteht, falls nie eine Antwort kommt (so steht es auch in [roadmap.md](roadmap.md)).
+- [ ] Kapazitätsprüfung der Zielwoche: ≤4 ok · 5 = umtragen **und** die Crew informieren, dass jemand tauschen könnte · ≥6 = ablehnen, neue Woche erfragen.
+- [ ] Zielwoche anlegen, falls es noch keine Seite gibt.
+- [ ] Falls die alte Woche dadurch unterbesetzt ist: erneut auslosen, mit Ausschluss des gerade Ausgetragenen.
+- [ ] `RESCHEDULE_ENABLED = True` (schaltet den ❌-Hinweis in den DMs frei).
 
 ## Phase 7 — End-to-End-Test im Sandbox-Workspace
 
-- [ ] Kompletter Durchlauf: Plan → Raffle → DM → Reaktion → Reschedule → Nachlosen → Remind.
-- [ ] Fehlerfälle: zu wenige Kandidaten, Zielwoche voll (5 und ≥6), Jahreswechsel (KW 52 → KW 1), KW-53-Jahr.
+- [ ] Kompletter Durchlauf: Plan → Raffle → DM → ❌ → Nachfrage → Antwort → Umtragen → Nachlosen → Remind.
+- [ ] Fehlerfälle: zu wenige Kandidaten, Zielwoche voll (5 und ≥6), ungültige Antwort, Antwort auf eine gesperrte Woche, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr.
+- [ ] Prüfen, dass eine einmal verarbeitete Reaktion beim nächsten Poll nicht erneut greift.
 
 ## Phase 8 — Cutover
 
+- [ ] Vorab einmal `DRY_RUN=true DEBUG=true` gegen den **echten** Slack-Workspace laufen lassen und die E-Mail→Slack-Zuordnung prüfen (im Sandbox lässt sich das nicht testen, weil dort alle DMs umgeleitet werden).
 - [ ] Auf echten Workspace/Kanal + echte Notion-IDs umstellen.
+- [ ] Sammelseiten „Ausgetragen" (KW 0) und „Postponed" (KW 54) in Notion löschen, jetzt wo `Putzstatus` sie ersetzt.
 - [ ] Ersten vollen Zyklus eng beobachten.
 
-## Phase 9 — Später
+## Phase 9 — Umzug auf Hetzner + Socket Mode
 
-- [ ] Webhook-Umzug auf Hetzner (siehe Ende von [webhook-setup.md](webhook-setup.md)) — reiner Deploy-Wechsel, kein Rewrite.
-- [ ] V3.1: Erinnerungen/Fristen für ausstehende Reaktionen.
-- [ ] Ggf. Sonderbehandlung `Putzstatus: Priorität` / `Postponed`.
+- [ ] Socket Mode statt Polling: dauerhafte WebSocket-Verbindung, Reaktionen in Sekunden statt Stunden. Braucht ein App-Level-Token (`xapp-…`) und einen dauerhaft laufenden Prozess — aber **keine** öffentliche URL, kein HTTPS, keinen Reverse Proxy.
+- [ ] Der Zuordnungsteil aus Phase 5/6 bleibt unverändert; nur die Zustellung wechselt.
+- [ ] Danach sind Buttons und Slash-Commands möglich (V3.2/V3.3, siehe [roadmap.md](roadmap.md)) — die gehen per Polling grundsätzlich nicht.
+- [ ] [webhook-setup.md](webhook-setup.md) beschreibt die HTTP-Webhook-Variante. Die ist für diesen Fall vermutlich nicht mehr nötig; das Dokument bleibt als Referenz.
 
 ## Priorität, falls Zeit knapp ist
 
-Phasen 1–4 liefern schon eigenständigen Mehrwert **ohne** Webhook: korrekter Mehrwochen-Zyklus, fairere Auslosung, wöchentliche Erinnerung. Nur Reschedule fehlt dann. Phasen 5–6 sind der aufwändigere, unabhängig nachziehbare Teil.
+Phasen 1–4 liefern schon eigenständigen Mehrwert: korrekter Mehrwochen-Zyklus, fairere Auslosung, wöchentliche Erinnerung — nur ohne Reschedule. Phasen 5–6 sind mit dem Polling-Ansatz deutlich kleiner geworden und brauchen keine neue Infrastruktur.

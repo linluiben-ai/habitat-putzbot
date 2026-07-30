@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__00467710-907d-40e0-ba5d-7abba6cfeb46__notion-fetch",
+      "mcp__00467710-907d-40e0-ba5d-7abba6cfeb46__notion-query-data-sources",
+      "mcp__00467710-907d-40e0-ba5d-7abba6cfeb46__notion-search",
+      "mcp__124c0872-0f26-4779-b0a1-14f933da1e1e__slack_read_channel"
+    ]
+  }
+}

@@ -130,6 +130,19 @@ Ein Slack-Sandbox-Workspace bringt ein paar vorgefertigte User mit. Wofür sie t
 
 Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über dich selbst.
 
+## Offene Blocker (Stand 30.07.2026)
+
+Beim ersten Live-Versuch sind vier Dinge aufgefallen, die alle nur du beheben kannst:
+
+| Problem | Symptom | Behebung |
+|---|---|---|
+| `NOTION_TOKEN` ungültig | HTTP 401 `API token is invalid` auf **allen** Datenquellen (auch produktiv) | Token in den Notion-Integrationseinstellungen neu erzeugen und in `.env` + GitHub-Secrets eintragen. Format war korrekt (`ntn_…`, 50 Zeichen) — der Wert ist also nicht vertippt, sondern abgelaufen/zurückgezogen. |
+| `SLACK_TOKEN` (produktiv) ungültig | `invalid_auth` | Bot-Token des produktiven Workspace neu holen. |
+| Sandbox-App hat zu wenige Scopes | `missing_scope`, vorhanden nur `channels:history,chat:write` | App mit [slack-app-manifest.yml](slack-app-manifest.yml) neu konfigurieren (oder Scopes von Hand ergänzen) und **neu installieren**. Fehlen: `im:write`, `im:history`, `users:read`, `users:read.email`, `reactions:read`. |
+| Bot ist nicht im Sandbox-Kanal | `not_in_channel` | Im Testkanal `/invite @putzbot` ausführen. |
+
+Der Sandbox-Bot-Token selbst funktioniert (Team „Habitat Sandbox", Bot `putzbot`).
+
 ## Was ich von dir brauche, um mitzutesten
 
 - [x] `Jahr`-Property in der Putzplan-DB (alle 28 Seiten auf 2026).
