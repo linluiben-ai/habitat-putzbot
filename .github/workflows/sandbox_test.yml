@@ -61,40 +61,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # TEMPORÄR — wieder entfernen, sobald die Secret-Frage geklärt ist.
-      #
-      # Gibt ausschließlich Zeichenlängen aus, nie Werte. Bewusst einzelne
-      # Abfragen statt toJSON(secrets): das Ausgeben aller Secrets auf einmal
-      # lässt GitHub den Lauf gar nicht erst starten (conclusion
-      # 'action_required').
-      #
-      # Neben den erwarteten Namen ein paar plausible Schreibweisen — 0 bei
-      # allen heißt 'nicht angelegt', ein Treffer heißt 'heißt anders'.
-      - name: Diagnose — welche Secret-Namen sind belegt
-        env:
-          S01_SANDBOX_SLACK_TOKEN: ${{ secrets.SANDBOX_SLACK_TOKEN }}
-          S02_SANDBOX_SLACK_CHANNEL_ID: ${{ secrets.SANDBOX_SLACK_CHANNEL_ID }}
-          S03_SANDBOX_SLACK_TEST_USER_ID: ${{ secrets.SANDBOX_SLACK_TEST_USER_ID }}
-          S04_SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
-          S05_SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          S06_SANDBOX_TOKEN: ${{ secrets.SANDBOX_TOKEN }}
-          S07_SANDBOX_CHANNEL_ID: ${{ secrets.SANDBOX_CHANNEL_ID }}
-          S08_SLACK_SANDBOX_TOKEN: ${{ secrets.SLACK_SANDBOX_TOKEN }}
-          S09_SLACK_SANDBOX_CHANNEL_ID: ${{ secrets.SLACK_SANDBOX_CHANNEL_ID }}
-          S10_SANDBOX_SLACK_BOT_TOKEN: ${{ secrets.SANDBOX_SLACK_BOT_TOKEN }}
-          S11_NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          S12_DS_A_ID: ${{ secrets.DS_A_ID }}
-          S13_DS_B_ID: ${{ secrets.DS_B_ID }}
-          S14_TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
-          S15_TEST_DS_B_ID: ${{ secrets.TEST_DS_B_ID }}
-          S16_TEST_TEMPLATE_ID: ${{ secrets.TEST_TEMPLATE_ID }}
-        run: |
-          echo "Zeichenlänge je Secret-Name (0 = nicht vorhanden oder leer):"
-          for name in $(env | grep -o '^S[0-9][0-9]_[A-Z_]*' | sort); do
-            wert="${!name}"
-            printf '  %-34s %s\n' "${name#S??_}" "${#wert}"
-          done
-
       - name: Tests
         run: python tests.py
 
