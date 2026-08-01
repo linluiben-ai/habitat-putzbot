@@ -531,6 +531,35 @@ def test_poll_flow():
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
 
 
+def test_filter_umfang():
+    print("\n=== Filter: Tag-Pruefung greift weiter als der Lostopf ===")
+
+    def bedingungen(f):
+        """Alle 'property'-Namen aus einem verschachtelten Notion-Filter."""
+        namen = set()
+        if isinstance(f, dict):
+            if "property" in f:
+                namen.add(f["property"])
+            for wert in f.values():
+                namen |= bedingungen(wert)
+        elif isinstance(f, list):
+            for eintrag in f:
+                namen |= bedingungen(eintrag)
+        return namen
+
+    lostopf = bedingungen(notion.MEMBER_FILTER)
+    tags = bedingungen(notion.TAG_CHECK_FILTER)
+
+    check("Lostopf filtert auf Mitgliedsstatus", "Mitgliedsstatus" in lostopf, True)
+    check("Tag-Pruefung nicht", "Mitgliedsstatus" in tags, False)
+    check("Tag-Pruefung ignoriert das Onboarding", "Onboarding: Status" in tags, False)
+    check("beide filtern auf Putzstatus",
+          "Putzstatus" in lostopf and "Putzstatus" in tags, True)
+    check("beide lassen Ausgetretene draussen",
+          "Austrittsdatum" in lostopf and "Austrittsdatum" in tags, True)
+    check("Tag-Pruefung ist echt weiter gefasst", tags < lostopf, True)
+
+
 def test_clean_string():
     print("\n=== Abgeleitete E-Mail-Adressen ===")
     check("Umlaute", notion.clean_string("Müller"), "mueller")
@@ -583,6 +612,8 @@ def test_tagcheck():
         check("Grund bei fehlender E-Mail", "keine E-Mail" in fehlend[1][1], True)
 
         bericht = tagcheck.baue_bericht(erreichbar, fehlend)
+        check("Bericht sagt, dass er weiter greift als der Lostopf",
+              "prinzipiell" in bericht, True)
         check("Bericht nennt beide Zahlen",
               "✅ 2 erreichbar" in bericht and "❌ 2 nicht erreichbar" in bericht, True)
         check("nicht Erreichbare stehen mit Namen drin", "Zadlo" in bericht, True)
@@ -607,6 +638,7 @@ def main():
     test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
+    test_filter_umfang()
     test_clean_string()
     test_tagcheck()
 

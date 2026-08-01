@@ -87,7 +87,9 @@ def main(argv):
 
     if modus == "tags":
         # Reine Diagnose: kein Wochen-Lookup nötig, kein Schreibzugriff.
-        members = notion.get_eligible_members()
+        # Bewusst der weitere Filter — geprüft wird, wer prinzipiell losbar ist,
+        # nicht nur der heutige Topf.
+        members = notion.get_taggable_members()
         if members is None:
             return 1
         code = tagcheck.run(members)

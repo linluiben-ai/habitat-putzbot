@@ -255,6 +255,38 @@ MEMBER_FILTER = {
 }
 
 
+# Für die Tag-Prüfung bewusst ein WEITERER Filter als beim Auslosen: geprüft
+# werden soll jede:r, die/der prinzipiell einmal in den Topf kommen kann, nicht
+# nur der heutige Topf. Wer heute 'Neu' ist, ist in zwei Monaten 'Normal' — und
+# dann soll die E-Mail schon stimmen, statt dass es beim ersten Einsatz auffällt.
+#
+# Einzige Einschränkung, die bleibt: ausgetretene Mitglieder. Die werden nie
+# wieder gelost, sie hier zu melden wäre Rauschen, das niemand je abarbeitet.
+TAG_CHECK_FILTER = {
+    "and": [
+        {"property": "Austrittsdatum", "date": {"is_empty": True}},
+        {
+            "or": [
+                {"property": "Putzstatus", "select": {"is_empty": True}},
+                *[
+                    {"property": "Putzstatus", "select": {"equals": value}}
+                    for value in PUTZSTATUS_ELIGIBLE
+                    if value is not None
+                ],
+            ]
+        },
+    ]
+}
+
+
+def get_taggable_members():
+    """Alle, die prinzipiell einmal gelost werden können — Grundlage der Tag-Prüfung."""
+    members = _load_members(TAG_CHECK_FILTER)
+    if members is not None:
+        debug(f"{len(members)} Mitglieder mit losbarem Putzstatus (Tag-Prüfung).")
+    return members
+
+
 def get_eligible_members():
     """Losbare Mitglieder — gefiltert nach Mitgliedsstatus, Onboarding und Putzstatus."""
     members = _load_members(MEMBER_FILTER)

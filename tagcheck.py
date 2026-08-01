@@ -66,7 +66,9 @@ def baue_bericht(erreichbar, fehlend):
     """Ergebnis als Slack-Nachricht."""
     gesamt = len(erreichbar) + len(fehlend)
     text = (
-        f"🔎 *Tag-Prüfung* — {gesamt} losbare Mitglieder\n\n"
+        f"🔎 *Tag-Prüfung* — {gesamt} Mitglieder mit losbarem Putzstatus\n"
+        f"_(alle, die prinzipiell in den Topf kommen können — nicht nur der "
+        f"heutige Topf; ausgetretene sind draußen.)_\n\n"
         f"✅ {len(erreichbar)} erreichbar   ❌ {len(fehlend)} nicht erreichbar\n"
     )
 
@@ -107,7 +109,7 @@ def run(members):
         )
         return 1
 
-    print(f"\n🔎 Tag-Prüfung für {len(members)} losbare Mitglieder")
+    print(f"\n🔎 Tag-Prüfung für {len(members)} Mitglieder mit losbarem Putzstatus")
     erreichbar, fehlend = pruefe(members)
 
     print(f"   ✅ {len(erreichbar)} erreichbar")
