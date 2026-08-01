@@ -6,11 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Putzbot" — a scheduled bot that runs the cleaning-crew ("Putzplan") lottery for a club (das-habitat.de). It reads member and cleaning-schedule data from two linked Notion data sources, draws members to fill upcoming weeks' crews, writes the result back to Notion, and notifies people via Slack. It runs unattended via GitHub Actions (`.github/workflows/monday_cleanup.yml`) on a cron (Mondays 08:00 UTC) or manually via `workflow_dispatch`.
 
-A third workflow, `.github/workflows/sandbox_test.yml`, is manual-only and has `SANDBOX=true` / `USE_TEST_DATA=true` hardcoded rather than as inputs — it must not be able to reach production data even by mistake. Because `config.py` swaps in the `SANDBOX_*`/`TEST_*` values, that run needs only `NOTION_TOKEN` and `DS_A_ID` from the production secrets (the Mitgliederliste is read-only).
+Two scheduled workflows drive production (`monday_cleanup.yml`, `poll_reactions.yml`). Three more are **manual-only and exist for testing**; each hardcodes its safety switches rather than exposing them as inputs, so a misclick cannot reach production:
+
+| Workflow | Slack | Notion | Guard |
+|---|---|---|---|
+| `sandbox_test.yml` | sandbox | test copy | `SANDBOX=true` + `USE_TEST_DATA=true` hardcoded. Needs only `NOTION_TOKEN` and `DS_A_ID` from the production secrets, because `config.py` swaps in the `SANDBOX_*`/`TEST_*` values. |
+| `prod_dm_test.yml` | **real** | test copy | `DM_ONLY=true` hardcoded, plus a step that aborts when `SLACK_TEST_USER_ID` is empty — without the redirect, DMs would reach real members. For paths the sandbox cannot reproduce. |
+| `check_tags.yml` | **real** | read-only | The `tags` mode touches no write path and aborts without `SLACK_TEST_USER_ID`. Must run against the real workspace: in the sandbox none of the real addresses exist. |
 
 The year is divided into **13 cycles of 4 weeks** (cycle 1 = KW 1–4, … cycle 13 = KW 49–52; in 53-week ISO years KW 53 joins cycle 13). Every Monday the bot posts a reminder for the current week; in the **last week of a cycle** it additionally plans the whole *next* cycle — creating pages and drawing crews four weeks in advance so people can plan around it.
 
-[roadmap.md](roadmap.md) is the design doc for the full target state; [implementation-plan.md](implementation-plan.md) tracks which parts are built and records the agreed-upon decisions (candidate-pool rules, reschedule thresholds, verified Notion schemas). **Read implementation-plan.md before changing raffle or scheduling behavior** — it documents *why* the rules are what they are. The reschedule flow (Slack ✅/❌ reactions → webhook) is designed but not yet implemented; see [webhook-setup.md](webhook-setup.md).
+[roadmap.md](docs/roadmap.md) is the design doc for the full target state; [implementation-plan.md](docs/implementation-plan.md) tracks which parts are built and records the agreed-upon decisions (candidate-pool rules, reschedule thresholds, verified Notion schemas). **Read implementation-plan.md before changing raffle or scheduling behavior** — it documents *why* the rules are what they are. The reschedule flow is built and verified against the real workspace; it runs on **polling**, not on a webhook. [webhook-setup.md](docs/webhook-setup.md) describes the HTTP variant that was considered and dropped — kept as reference, not as a description of the current state.
+
+Everything except `README.md` and this file lives in [`docs/`](docs). `CLAUDE.md` stays at the repo root on purpose: Claude Code only picks it up project-wide from there, and inside a subfolder it would apply to that folder alone.
 
 ## Commands
 
@@ -57,7 +65,7 @@ There is no test framework; `tests.py` is a plain script that fakes the Notion/S
 | `DM_ONLY` | `"true"` → suppress channel messages, still send DMs. For tests against the **real** workspace, where a stray post to #räumen-und-ratschen is the one thing you cannot take back. Enforced inside `post_channel`, like `DRY_RUN`. |
 | `DEBUG` | `"true"` → verbose diagnostics (per-tier candidate counts, lookups) |
 | `FORCE_PLAN` | `"true"` → run cycle planning even outside the last week of a cycle |
-| `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](sandbox-setup.md)) |
+| `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](docs/sandbox-setup.md)) |
 | `SANDBOX` | `"true"` → switch Slack to the sandbox workspace |
 | `SANDBOX_SLACK_TOKEN`, `SANDBOX_SLACK_CHANNEL_ID` | Required when `SANDBOX=true`; config aborts rather than falling back to the real workspace |
 | `SANDBOX_SLACK_TEST_USER_ID` | Sandbox DM target — a *different* user ID than in the real workspace |
@@ -122,6 +130,8 @@ Two consequences worth remembering:
 - An invalid reply is answered with a *new* question carrying `META_FRAGE`, which re-anchors the scan. That is what stops the bot from replying to the same nonsense on every poll.
 
 A member is only removed from their old week once a **valid** target week is confirmed — otherwise a week could silently end up understaffed when someone declines and never answers.
+
+The bot **pre-seeds ✅ and ❌ on its own draw DM** (`PREFILL_REACTIONS`, needs the `reactions:write` scope) so a member only has to click, instead of having to think of reacting and then hit the right emoji — an unrecognised emoji does nothing at all, silently. This only works because `read_dm_history` drops reactions whose only reactor is the bot itself, via `eigene_user_id()` (`auth.test`, cached). Without that filter every draw DM would look like a ❌ and the next poll would ask the whole crew to reschedule. If the bot's own ID cannot be determined, `read_dm_history` deliberately reports *no* reactions at all and says so loudly: a missed reaction is caught by the next poll, a mass false alarm is not.
 
 Every bot DM carries the member's Notion ID in its metadata payload, and `reschedule.verlauf_fuer` drops bot messages belonging to someone else before the state machine runs. In production each member has their own DM channel, so this filters nothing — but with `SLACK_TEST_USER_ID` *all* DMs land in one channel, and without it a single ❌ would move the whole crew of that week. That is also why the swap confirmation carries `META_BESTAETIGUNG`: an untagged confirmation would anchor every member's scan, not just its recipient's.
 

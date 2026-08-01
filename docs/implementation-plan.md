@@ -47,7 +47,7 @@ Templates: „Neue Putzcrew (Automation)" `2eab71ac-7d09-80ef-954f-d3e298915dfe`
 
 ## Phase 1 — Refactor zu Mehrdatei-Struktur ✅
 
-- [x] `config.py`, `cycles.py`, `notion.py`, `raffle.py`, `slack_utils.py`, `scheduler.py` aus [main.py](main.py) herausgezogen.
+- [x] `config.py`, `cycles.py`, `notion.py`, `raffle.py`, `slack_utils.py`, `scheduler.py` aus [main.py](../main.py) herausgezogen.
 - [x] `main.py` orchestriert nur noch.
 - [x] `monday_cleanup.yml` behält `python main.py` als Einstiegspunkt.
 - [x] Pagination in allen Notion-Queries ergänzt.
@@ -129,7 +129,7 @@ Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
       mit „mehr als 10 Zyklen im Voraus". In beiden Fällen wird nichts umgetragen
       und erneut nachgefragt.
 - [ ] Live nicht durchgespielt: zu wenige Kandidaten, Jahreswechsel (KW 52 → KW 1),
-      KW-53-Jahr. Offline in [tests.py](tests.py) abgedeckt.
+      KW-53-Jahr. Offline in [tests.py](../tests.py) abgedeckt.
 
 ### Dabei gefundene Eigenheit: „Vergangenheit" ist unerreichbar
 
@@ -155,6 +155,19 @@ Beides wird **manuell** ausgelöst, die Cron-Trigger bleiben so lange aus.
 Wichtig: KW 32 ist die **letzte Woche von Zyklus 8**, `should_plan` ist dort also
 `true`. Ein einfaches `python main.py` würde am Montag zusätzlich Zyklus 9 planen
 und DMs verschicken — deshalb am Montag zwingend `draw` und nicht `weekly`.
+
+## Phase 7.1 — Reaktionen vorsetzen ✅
+
+- [x] Der Bot setzt ✅/❌ auf seiner Auslos-DM selbst vor (`PREFILL_REACTIONS`), damit
+      das Mitglied nur noch klicken muss. Ein unbekanntes Emoji löst nämlich
+      **stillschweigend nichts** aus — die Person hält die Sache trotzdem für erledigt.
+- [x] `read_dm_history` filtert die eigenen Reaktionen wieder heraus
+      (`eigene_user_id()` via `auth.test`). Ohne das sähe jede Auslos-DM wie ein ❌
+      aus und der Poll fragte die komplette Crew.
+- [x] Am 01.08. gegen den echten Workspace verifiziert: DM trägt beide Emojis,
+      Poll ohne Klick meldet „Nichts Neues", nach dem Klick kommt die Nachfrage.
+- [x] Braucht `reactions:write` — **produktiv fehlte dabei sogar `reactions:read`**,
+      der Poll hätte dort also nie eine Reaktion gesehen.
 
 ## Phase 8 — Cutover
 

@@ -13,7 +13,7 @@ Der Bot verschickt DMs an einzelne Mitglieder und postet in einen Kanal. Beides 
 Per **App-Manifest**, nicht Klick für Klick:
 
 1. Auf [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From an app manifest*.
-2. Sandbox-Workspace wählen, dann den Inhalt von [slack-app-manifest.yml](slack-app-manifest.yml) reinkopieren.
+2. Sandbox-Workspace wählen, dann den Inhalt von [slack-app-manifest.yml](../slack-app-manifest.yml) reinkopieren.
 3. **Install to Workspace** → das **Bot User OAuth Token** (`xoxb-…`) kopieren. Das gehört in `SANDBOX_SLACK_TOKEN`.
 
    ⚠️ Slack zeigt unter Umständen **zwei** Tokens an — nicht verwechseln:
@@ -25,6 +25,8 @@ Per **App-Manifest**, nicht Klick für Klick:
 4. Im Sandbox-Workspace einen Kanal anlegen (z.B. `#putzbot-test`), den Bot per `/invite @Putzbot` hinzufügen, und die Kanal-ID notieren (Kanal → Details → ganz unten).
 
 Die Scopes stehen alle im Manifest, inklusive derer für Phase 5/6 (`reactions:read`, `im:history`) — die schaden jetzt nicht und ersparen später eine Neuinstallation der App.
+
+⚠️ **`reactions:write` kam später dazu** (der Bot setzt ✅/❌ auf seiner Auslos-DM selbst vor). Wer die App vorher installiert hat, muss sie **neu installieren**, sonst scheitert das Vorsetzen mit `missing_scope`. Die DM geht trotzdem raus — nur eben ohne Vorlage.
 
 **Slack CLI lohnt sich hier nicht.** Die ist auf Deno-basierte Workflow-Apps ausgelegt; für einen klassischen Bot mit Token käme man über Umwege zum selben Ergebnis. Das Manifest bringt den eigentlichen Vorteil (reproduzierbar, alle Scopes auf einmal) ganz ohne Installation.
 
@@ -97,7 +99,7 @@ Zusätzlich lenkt `SLACK_TEST_USER_ID` alle DMs auf dich um (siehe Schritt 2).
 
 ## Schritt 5: Lokal ausführen
 
-Alle Werte kommen in eine `.env` neben `config.py` — die ist in `.gitignore` und wird automatisch geladen. [.env.example](.env.example) als Vorlage kopieren und ausfüllen:
+Alle Werte kommen in eine `.env` neben `config.py` — die ist in `.gitignore` und wird automatisch geladen. [.env.example](../.env.example) als Vorlage kopieren und ausfüllen:
 
 ```bash
 cp .env.example .env
@@ -132,7 +134,7 @@ Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über di
 
 ## Testlauf über GitHub Actions
 
-Neben dem lokalen Aufruf gibt es [`sandbox_test.yml`](.github/workflows/sandbox_test.yml)
+Neben dem lokalen Aufruf gibt es [`sandbox_test.yml`](../.github/workflows/sandbox_test.yml)
 — nur manuell startbar, mit `SANDBOX=true` und `USE_TEST_DATA=true` **fest verdrahtet**
 statt als Input. Der Workflow soll die Produktivdaten auch bei einem Fehlklick nicht
 erreichen können; wer produktiv laufen will, nimmt die anderen beiden Workflows.
@@ -164,7 +166,7 @@ Mitglieder gezogen, DMs umgeleitet. Poll-Modus läuft ebenfalls sauber.
 
 | Problem | Symptom | Behebung |
 |---|---|---|
-| Sandbox-App hat zu wenige Scopes | `missing_scope`, vorhanden nur `channels:history,chat:write` | App mit [slack-app-manifest.yml](slack-app-manifest.yml) neu konfigurieren und **neu installieren**. Fehlen: `im:write`, `im:history`, `users:read`, `users:read.email`, `reactions:read`. Ohne die gehen keine DMs und keine Reaktionsabfrage. |
+| Sandbox-App hat zu wenige Scopes | `missing_scope`, vorhanden nur `channels:history,chat:write` | App mit [slack-app-manifest.yml](../slack-app-manifest.yml) neu konfigurieren und **neu installieren**. Fehlen: `im:write`, `im:history`, `users:read`, `users:read.email`, `reactions:read`, `reactions:write`. Ohne die gehen keine DMs und keine Reaktionsabfrage. |
 | Bot ist nicht im Sandbox-Kanal | `not_in_channel` | Im Testkanal `/invite @putzbot` ausführen. |
 | Datenfehler in der Mitgliederliste | Mitglied „Zadlo, " hat keinen Vornamen | In Notion den Vornamen ergänzen. Sonst greift zwar der Fallback (Anzeige „Zadlo"), aber die abgeleitete E-Mail `.zadlo@das-habitat.de` ist unbrauchbar — diese Person bekäme produktiv nie eine DM. |
 
@@ -199,7 +201,7 @@ und die zitierte Antwort, die mitten im Wort abgeschnitten wurde.
 ## Test gegen den echten Workspace (01.08.2026)
 
 Zwei Wege lassen sich im Sandbox nicht mehr nachstellen, sobald dort niemand
-mitliest. Dafür gibt es [`prod_dm_test.yml`](.github/workflows/prod_dm_test.yml):
+mitliest. Dafür gibt es [`prod_dm_test.yml`](../.github/workflows/prod_dm_test.yml):
 echter Slack, Notion weiterhin auf der Testkopie, `DM_ONLY=true`, und ein Schritt,
 der ohne `SLACK_TEST_USER_ID` abbricht.
 
