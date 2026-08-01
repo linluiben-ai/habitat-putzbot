@@ -61,6 +61,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # TEMPORÄR — wieder entfernen, sobald die Secret-Frage geklärt ist.
+      # Gibt nur Namen und Längen aus, nie Werte: die gehen durch jq und
+      # tauchen im Log gar nicht erst auf (GitHub würde sie zusätzlich
+      # maskieren). Klärt, ob ein Secret fehlt, leer ist oder anders heißt.
+      - name: Diagnose — was kommt an
+        env:
+          ALLE_SECRETS: ${{ toJSON(secrets) }}
+          ALLE_VARS: ${{ toJSON(vars) }}
+        run: |
+          echo "── Verfügbare Secret-Namen ──"
+          jq -r 'keys[]' <<< "$ALLE_SECRETS"
+          echo
+          echo "── Verfügbare Variable-Namen ──"
+          jq -r 'keys[]' <<< "$ALLE_VARS"
+          echo
+          echo "── Länge je Secret (0 = angelegt, aber leer) ──"
+          jq -r 'to_entries[] | "\(.key) = \(.value | length)"' <<< "$ALLE_SECRETS" | sort
+
       - name: Tests
         run: python tests.py
 
