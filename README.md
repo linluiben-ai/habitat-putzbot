@@ -16,7 +16,7 @@ Die Auslosung ist gestaffelt und wird erst gelockert, wenn zu wenige Kandidat:in
 
 Wer eine Stufe früher qualifiziert war, behält seinen Platz. Angestrebt werden pro Woche 2 neue und 2 länger dabei seiende Mitglieder — damit man beim Putzen auch mal jemanden kennenlernt.
 
-Ausgeloste bekommen eine DM und können mit ❌ reagieren, um zu tauschen. Der Bot fragt dann nach der Wunschwoche und trägt um.
+Ausgeloste bekommen eine DM, auf der ✅ und ❌ schon stehen — ein Klick genügt. Bei ❌ fragt der Bot nach der Wunschwoche und trägt um.
 
 ## Die Abläufe
 
@@ -26,8 +26,9 @@ Ausgeloste bekommen eine DM und können mit ❌ reagieren, um zu tauschen. Der B
 | [`poll_reactions.yml`](.github/workflows/poll_reactions.yml) | 5× täglich | schaut nach ✅/❌ auf den Auslos-DMs und wickelt Tauschwünsche ab |
 | [`sandbox_test.yml`](.github/workflows/sandbox_test.yml) | nur manuell | Testlauf gegen Sandbox-Slack und Notion-Testkopie |
 | [`check_tags.yml`](.github/workflows/check_tags.yml) | nur manuell | prüft gegen den echten Workspace, ob jedes Mitglied per E-Mail auffindbar ist |
+| [`prod_dm_test.yml`](.github/workflows/prod_dm_test.yml) | nur manuell | echter Slack, Notion-Testkopie, keine Kanal-Nachrichten — für Wege, die sich im Sandbox nicht nachstellen lassen |
 
-Alle drei lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
+Alle lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
 
 ## Betriebsarten
 
@@ -67,18 +68,22 @@ python tests.py
 
 ## Wo was steht
 
+Alles außer dieser Datei und `CLAUDE.md` liegt in [`docs/`](docs). `CLAUDE.md` bleibt
+bewusst im Wurzelverzeichnis: Claude Code lädt sie nur von dort automatisch für das
+ganze Projekt — in einem Unterordner gälte sie nur für diesen Ordner.
+
 | Datei | Inhalt |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | Technische Übersicht: Module, Auslosungsregeln, Stolperfallen |
-| [implementation-plan.md](implementation-plan.md) | Was gebaut ist, was noch offen ist, und **warum** die Regeln so sind |
-| [roadmap.md](roadmap.md) | Ursprünglicher Entwurf + Ausblick (Buttons, Slash-Commands, …) |
-| [sandbox-setup.md](sandbox-setup.md) | Testen ohne echte Mitglieder zu behelligen |
-| [webhook-setup.md](webhook-setup.md) | Referenz für die Webhook-Variante (aktuell nicht genutzt) |
+| [implementation-plan.md](docs/implementation-plan.md) | Was gebaut ist, was noch offen ist, und **warum** die Regeln so sind |
+| [roadmap.md](docs/roadmap.md) | Ursprünglicher Entwurf + Ausblick (Buttons, Slash-Commands, …) |
+| [sandbox-setup.md](docs/sandbox-setup.md) | Testen ohne echte Mitglieder zu behelligen |
+| [webhook-setup.md](docs/webhook-setup.md) | Referenz für die Webhook-Variante (aktuell nicht genutzt) |
 
 ## Stand
 
-V3 ist gebaut und im Sandbox-Workspace end-to-end getestet (01.08.2026): Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion — inklusive Umtragen, Nachlosen und dem Nachweis, dass eine einmal verarbeitete Reaktion nicht erneut greift. Einzelheiten in [sandbox-setup.md](sandbox-setup.md).
+V3 ist gebaut und im Sandbox-Workspace end-to-end getestet (01.08.2026): Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion — inklusive Umtragen, Nachlosen und dem Nachweis, dass eine einmal verarbeitete Reaktion nicht erneut greift. Einzelheiten in [sandbox-setup.md](docs/sandbox-setup.md).
 
-Als Nächstes kommt der Umstieg auf die Produktivdaten in zwei Schritten (KW 32: altes Verfahren mit neuer Auslosung, danach der erste Zyklus nach dem neuen) — der Ablauf steht in [implementation-plan.md](implementation-plan.md).
+Als Nächstes kommt der Umstieg auf die Produktivdaten in zwei Schritten (KW 32: altes Verfahren mit neuer Auslosung, danach der erste Zyklus nach dem neuen) — der Ablauf steht in [implementation-plan.md](docs/implementation-plan.md).
 
 Später geplant: Umzug auf den Hetzner-Server mit Socket Mode, dann Reaktionen in Sekunden statt Stunden und darauf aufbauend Buttons statt Emoji-Reaktionen.
