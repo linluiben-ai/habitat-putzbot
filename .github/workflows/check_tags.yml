@@ -1,0 +1,53 @@
+name: Putzbot Tag-Prüfung
+
+# Prüft vor dem Cutover, ob sich jedes losbare Mitglied in Slack finden lässt.
+#
+# Läuft bewusst gegen den ECHTEN Workspace — im Sandbox gibt es die
+# @das-habitat.de-Adressen nicht, dort schlägt jeder Lookup fehl und die
+# Prüfung wäre wertlos. Notion wird nur gelesen.
+#
+# Die einzige Nachricht, die dabei entsteht, ist der Bericht an
+# SLACK_TEST_USER_ID. Fehlt die Variable, bricht der Modus ab, statt jemand
+# Falsches anzuschreiben. Es werden weder Auslos-DMs verschickt noch Seiten
+# angelegt — `tags` fasst keinen Schreibpfad an.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry Run — Bericht nur im Log ausgeben, keine DM'
+        type: boolean
+        default: false
+
+jobs:
+  tags:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v5
+
+      - name: Python aufsetzen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Bibliotheken installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Tag-Prüfung
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          DS_A_ID: ${{ secrets.DS_A_ID }}
+          DS_B_ID: ${{ secrets.DS_B_ID }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+          # Ohne diesen Wert bricht der Modus ab — genau so gewollt.
+          SLACK_TEST_USER_ID: ${{ secrets.SLACK_TEST_USER_ID || vars.SLACK_TEST_USER_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEBUG: 'true'
+        run: python main.py tags

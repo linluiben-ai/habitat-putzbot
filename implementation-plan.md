@@ -142,7 +142,14 @@ und DMs verschicken — deshalb am Montag zwingend `draw` und nicht `weekly`.
 
 ## Phase 8 — Cutover
 
-- [ ] Vorab einmal `DRY_RUN=true DEBUG=true` gegen den **echten** Slack-Workspace laufen lassen und die E-Mail→Slack-Zuordnung prüfen (im Sandbox lässt sich das nicht testen, weil dort alle DMs umgeleitet werden).
+- [ ] **`python main.py tags` gegen den echten Workspace** (Workflow
+      `check_tags.yml`). Prüft für jedes losbare Mitglied, ob sich die Slack-ID
+      über die E-Mail finden lässt, und schickt das Ergebnis als DM an
+      `SLACK_TEST_USER_ID`. Im Sandbox nicht testbar, weil dort die echten
+      Adressen nicht existieren. Ergebnis abarbeiten, dann `Interne Email` in
+      Notion für alle Fehlenden ausfüllen — eine abgeleitete Adresse ist geraten
+      und scheitert lautlos.
+- [ ] Vorab einmal `DRY_RUN=true DEBUG=true` gegen den **echten** Slack-Workspace laufen lassen und die fertigen Nachrichtentexte prüfen.
 - [ ] Auf echten Workspace/Kanal + echte Notion-IDs umstellen.
 - [ ] Sammelseiten „Ausgetragen" (KW 0) und „Postponed" (KW 54) in Notion löschen, jetzt wo `Putzstatus` sie ersetzt.
 - [ ] Ersten vollen Zyklus eng beobachten.

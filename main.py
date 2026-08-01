@@ -14,6 +14,10 @@ Dazu zwei Modi für den Umstieg von V2 auf V3, gedacht für den manuellen Aufruf
                             das alte Verfahren mit der neuen Auslosungslogik
     python main.py plan     nur den Folgezyklus planen (mit DMs und
                             Reschedule), ohne die Wochenerinnerung
+    python main.py tags     Diagnose vor dem Cutover: für jedes losbare
+                            Mitglied prüfen, ob sich die Slack-ID über die
+                            E-Mail finden lässt. Ergebnis kommt als DM,
+                            schreibt nichts.
 
 `weekly` ist die Summe aus Erinnerung und — am Zyklusende — `plan`. Die beiden
 Einzelmodi gibt es, damit sich beides an verschiedenen Tagen auslösen lässt.
@@ -27,6 +31,7 @@ import cycles
 import notion
 import reschedule
 import scheduler
+import tagcheck
 from config import (
     DATENQUELLE,
     DEBUG,
@@ -37,7 +42,7 @@ from config import (
     check_env,
 )
 
-MODI = ("weekly", "poll", "draw", "plan")
+MODI = ("weekly", "poll", "draw", "plan", "tags")
 
 
 def _lade_daten(mit_kandidaten):
@@ -79,6 +84,15 @@ def main(argv):
         print("🐛 DEBUG aktiv.")
     if SLACK_TEST_USER_ID:
         print(f"📮 Alle DMs gehen umgeleitet an {SLACK_TEST_USER_ID}.")
+
+    if modus == "tags":
+        # Reine Diagnose: kein Wochen-Lookup nötig, kein Schreibzugriff.
+        members = notion.get_eligible_members()
+        if members is None:
+            return 1
+        code = tagcheck.run(members)
+        print("\n✅ Fertig." if code == 0 else "")
+        return code
 
     if modus == "poll":
         # Kandidatenliste wird nur gebraucht, falls durch einen Tausch

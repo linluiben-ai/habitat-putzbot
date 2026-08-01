@@ -25,6 +25,7 @@ Ausgeloste bekommen eine DM und können mit ❌ reagieren, um zu tauschen. Der B
 | [`monday_cleanup.yml`](.github/workflows/monday_cleanup.yml) | montags 08:00 UTC | Erinnerung an die aktuelle Woche; am Zyklusende zusätzlich Planung des Folgezyklus |
 | [`poll_reactions.yml`](.github/workflows/poll_reactions.yml) | 5× täglich | schaut nach ✅/❌ auf den Auslos-DMs und wickelt Tauschwünsche ab |
 | [`sandbox_test.yml`](.github/workflows/sandbox_test.yml) | nur manuell | Testlauf gegen Sandbox-Slack und Notion-Testkopie |
+| [`check_tags.yml`](.github/workflows/check_tags.yml) | nur manuell | prüft gegen den echten Workspace, ob jedes Mitglied per E-Mail auffindbar ist |
 
 Alle drei lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
 
@@ -35,6 +36,7 @@ python main.py          # wöchentlich: Erinnerung, am Zyklusende zusätzlich Pl
 python main.py poll     # nach ✅/❌-Reaktionen schauen und Tauschwünsche abwickeln
 python main.py draw     # nur die laufende Woche auslosen, eine Kanalnachricht, keine DMs
 python main.py plan     # nur den Folgezyklus planen (mit DMs), ohne Wochenerinnerung
+python main.py tags     # Diagnose: findet Slack jedes losbare Mitglied? Bericht als DM
 ```
 
 `draw` und `plan` sind die beiden Hälften von `weekly`, einzeln auslösbar. Gedacht für den
