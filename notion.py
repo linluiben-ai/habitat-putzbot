@@ -1,5 +1,6 @@
 """Alle Notion-Zugriffe: Queries, Lookups, Schreiboperationen."""
 
+import re
 import unicodedata
 
 import requests
@@ -23,12 +24,18 @@ from config import (
 def clean_string(text):
     """Kleinschreibung ohne Umlaute/Diakritika — für generierte E-Mail-Adressen.
 
-    Leerzeichen fallen ersatzlos weg: mehrteilige Nachnamen wie „van de Ven"
-    ergaben sonst `remco.van de ven@…`, und ein Leerzeichen ist in einer
-    Adresse ungültig — der Lookup scheitert dann garantiert. Ob die Adresse
-    ohne Leerzeichen die richtige ist, bleibt geraten; verlässlich wird das
-    erst über `Interne Email`.
+    Zwei Dinge, die in der echten Mitgliederliste vorkommen und die Adresse
+    sonst unbrauchbar machen:
+
+    - **Spitznamen in Klammern.** „Jacqueline (Jacky)" ergab
+      `jacqueline(jacky).hoeger@…`. Der Klammerteil fliegt raus.
+    - **Leerzeichen.** „van de Ven" ergab `remco.van de ven@…`, und ein
+      Leerzeichen ist in einer Adresse schlicht ungültig.
+
+    Beides macht die Ableitung nur *plausibel*, nicht *richtig* — verlässlich
+    wird es erst über `Interne Email`.
     """
+    text = re.sub(r"\([^)]*\)", " ", text)
     text = text.lower()
     for umlaut, replacement in {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}.items():
         text = text.replace(umlaut, replacement)
@@ -253,6 +260,38 @@ MEMBER_FILTER = {
         },
     ]
 }
+
+
+# Für die Tag-Prüfung bewusst ein WEITERER Filter als beim Auslosen: geprüft
+# werden soll jede:r, die/der prinzipiell einmal in den Topf kommen kann, nicht
+# nur der heutige Topf. Wer heute 'Neu' ist, ist in zwei Monaten 'Normal' — und
+# dann soll die E-Mail schon stimmen, statt dass es beim ersten Einsatz auffällt.
+#
+# Einzige Einschränkung, die bleibt: ausgetretene Mitglieder. Die werden nie
+# wieder gelost, sie hier zu melden wäre Rauschen, das niemand je abarbeitet.
+TAG_CHECK_FILTER = {
+    "and": [
+        {"property": "Austrittsdatum", "date": {"is_empty": True}},
+        {
+            "or": [
+                {"property": "Putzstatus", "select": {"is_empty": True}},
+                *[
+                    {"property": "Putzstatus", "select": {"equals": value}}
+                    for value in PUTZSTATUS_ELIGIBLE
+                    if value is not None
+                ],
+            ]
+        },
+    ]
+}
+
+
+def get_taggable_members():
+    """Alle, die prinzipiell einmal gelost werden können — Grundlage der Tag-Prüfung."""
+    members = _load_members(TAG_CHECK_FILTER)
+    if members is not None:
+        debug(f"{len(members)} Mitglieder mit losbarem Putzstatus (Tag-Prüfung).")
+    return members
 
 
 def get_eligible_members():

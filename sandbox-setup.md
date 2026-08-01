@@ -196,6 +196,31 @@ sie hätte ein einzelnes ❌ im Sandbox die ganze Wochencrew verschoben), die Fe
 bei einer vollen Zielwoche, die vorher behauptete, sie hätte die Eingabe nicht verstanden,
 und die zitierte Antwort, die mitten im Wort abgeschnitten wurde.
 
+## Test gegen den echten Workspace (01.08.2026)
+
+Zwei Wege lassen sich im Sandbox nicht mehr nachstellen, sobald dort niemand
+mitliest. Dafür gibt es [`prod_dm_test.yml`](.github/workflows/prod_dm_test.yml):
+echter Slack, Notion weiterhin auf der Testkopie, `DM_ONLY=true`, und ein Schritt,
+der ohne `SLACK_TEST_USER_ID` abbricht.
+
+Vorbereitung: in der Testkopie eine Woche mit **drei** Mitgliedern vorbelegen, die
+übrigen Wochen des Folgezyklus sperren oder archivieren. Der `plan`-Lauf zieht dann
+genau eine Person und verschickt genau eine DM — die über die Umleitung bei der
+Testperson landet.
+
+| Fall | Ergebnis |
+|---|---|
+| Antwort auf eine gesperrte Woche | „Das klappt leider nicht mit `KW 34`: diese Woche ist gesperrt" |
+| Antwort außerhalb der Reichweite | „…mehr als 10 Zyklen im Voraus — such dir bitte etwas Näheres aus" |
+| Kanal | unberührt — `DM_ONLY` greift |
+
+Dabei ist ein Fehler aufgefallen, der zeigt, wozu solche Läufe gut sind: `DM_ONLY`
+war in `config` definiert, in `slack_utils` aber nicht importiert. Der `NameError`
+kam zufällig *vor* dem Senden, es ging also nichts in den Kanal — verlassen konnte
+man sich darauf nicht. Ursache im Testnetz: alle Tests ersetzten `post_channel`
+durch ein Lambda, die echte Funktion lief nie. `test_post_channel_schalter` ruft
+sie jetzt selbst auf.
+
 **Testdaten danach aufgeräumt:** die angelegten Wochen (KW 33–36, 40, 41) sind archiviert,
 ihre Mitglieder-Relationen gelöst und die Titel markiert — sie lassen sich in der
 Testdatenbank gefahrlos löschen. KW 31 steht wieder auf dem Stand vor dem `draw`-Test.
