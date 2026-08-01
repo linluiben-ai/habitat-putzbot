@@ -21,12 +21,19 @@ from config import (
 
 
 def clean_string(text):
-    """Kleinschreibung ohne Umlaute/Diakritika — für generierte E-Mail-Adressen."""
+    """Kleinschreibung ohne Umlaute/Diakritika — für generierte E-Mail-Adressen.
+
+    Leerzeichen fallen ersatzlos weg: mehrteilige Nachnamen wie „van de Ven"
+    ergaben sonst `remco.van de ven@…`, und ein Leerzeichen ist in einer
+    Adresse ungültig — der Lookup scheitert dann garantiert. Ob die Adresse
+    ohne Leerzeichen die richtige ist, bleibt geraten; verlässlich wird das
+    erst über `Interne Email`.
+    """
     text = text.lower()
     for umlaut, replacement in {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}.items():
         text = text.replace(umlaut, replacement)
     text = unicodedata.normalize("NFKD", text).encode("ASCII", "ignore").decode("utf-8")
-    return text.strip()
+    return "".join(text.split())
 
 
 # --- Low-Level ---

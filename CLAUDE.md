@@ -54,6 +54,7 @@ There is no test framework; `tests.py` is a plain script that fakes the Notion/S
 | `SLACK_CHANNEL_ID` | Channel for reminders and cycle summaries |
 | `TEMPLATE_ID` | Notion page template for a new week's page |
 | `DRY_RUN` | `"true"` → run the whole flow but skip every Notion/Slack write |
+| `DM_ONLY` | `"true"` → suppress channel messages, still send DMs. For tests against the **real** workspace, where a stray post to #räumen-und-ratschen is the one thing you cannot take back. Enforced inside `post_channel`, like `DRY_RUN`. |
 | `DEBUG` | `"true"` → verbose diagnostics (per-tier candidate counts, lookups) |
 | `FORCE_PLAN` | `"true"` → run cycle planning even outside the last week of a cycle |
 | `SLACK_TEST_USER_ID` | If set, **all** DMs are redirected to this user (sandbox testing — see [sandbox-setup.md](sandbox-setup.md)) |

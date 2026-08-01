@@ -119,6 +119,10 @@ Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
 - [x] Idempotenz: zweiter Poll direkt danach meldet „Nichts Neues."
 - [x] Der Mitglieds-Filter greift live: 16 Mitglieder lasen denselben DM-Verlauf
       (Sandbox-Umleitung), nur der tatsächlich Betroffene löste den Tausch aus.
+- [x] ✅ auf eine Auslos-DM löst nichts aus — im selben Poll wie ein ❌ eines
+      anderen Mitglieds geprüft, es wurde nur das ❌ bearbeitet.
+- [x] Freitext-Antwort („ich würde gerne in KW 41 putzen, geht das?") und
+      Unsinn-Antwort verhalten sich wie vorgesehen.
 - [ ] Restliche Fehlerfälle: zu wenige Kandidaten, gesperrte Zielwoche, Antwort in
       der Vergangenheit, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr. Die Logik dazu
       ist offline in [tests.py](tests.py) abgedeckt, live noch nicht durchgespielt.

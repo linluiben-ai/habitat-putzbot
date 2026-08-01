@@ -182,16 +182,25 @@ die Notion-Testkopie gelaufen:
 | Antwort „35" (volle Woche) | abgelehnt mit Notion-Link, nichts umgetragen |
 | Antwort „40" (freie Woche) | umgetragen, KW-40-Seite angelegt, KW 36 nachgelost, Bestätigung raus |
 | zweiter Poll | „Nichts Neues." — keine Doppelverarbeitung |
+| ✅ auf eine Auslos-DM | löst nichts aus (im selben Lauf wie ein ❌ eines anderen — nur das ❌ wurde bearbeitet) |
+| Antwort im Freitext | „ich würde gerne in KW 41 putzen, geht das?" korrekt als KW 41 erkannt |
+| Unsinn-Antwort | erneute Nachfrage, nichts umgetragen |
 | `draw` scharf | KW 31 von 2 auf 4 aufgefüllt, **eine** Kanalnachricht, **keine** DMs |
 
 Damit ist die eine Annahme bestätigt, auf der der ganze Reschedule-Flow steht: Slack
 liefert die Message-Metadata über `conversations_history` zurück. `read_dm_history` gibt
 das bei `DEBUG=true` mit aus — bei künftigen Läufen ein Blick auf diese Zeile genügt.
 
-Zwei Dinge, die dabei aufgefallen und behoben sind: die DM-Zuordnung pro Mitglied (ohne
-sie hätte ein einzelnes ❌ im Sandbox die ganze Wochencrew verschoben) und die
-Fehlermeldung bei einer vollen Zielwoche, die vorher behauptete, sie hätte die Eingabe
-nicht verstanden.
+Drei Dinge, die dabei aufgefallen und behoben sind: die DM-Zuordnung pro Mitglied (ohne
+sie hätte ein einzelnes ❌ im Sandbox die ganze Wochencrew verschoben), die Fehlermeldung
+bei einer vollen Zielwoche, die vorher behauptete, sie hätte die Eingabe nicht verstanden,
+und die zitierte Antwort, die mitten im Wort abgeschnitten wurde.
+
+**Testdaten danach aufgeräumt:** die angelegten Wochen (KW 33–36, 40, 41) sind archiviert,
+ihre Mitglieder-Relationen gelöst und die Titel markiert — sie lassen sich in der
+Testdatenbank gefahrlos löschen. KW 31 steht wieder auf dem Stand vor dem `draw`-Test.
+Der Notion-Connector kann Seiten nur ändern, nicht löschen; das letzte Wegräumen geht
+von Hand.
 
 ## Was ich von dir brauche, um mitzutesten
 
