@@ -571,6 +571,11 @@ def test_clean_string():
           notion.clean_string("van de Ven"), "vandeven")
     check("führende/anhängende Leerzeichen", notion.clean_string("  Kaufhold "),
           "kaufhold")
+    # Ebenfalls in der Produktion aufgefallen: 'jacqueline(jacky).hoeger@…'
+    check("Spitzname in Klammern fliegt raus",
+          notion.clean_string("Jacqueline (Jacky)"), "jacqueline")
+    check("... auch mitten im Namen",
+          notion.clean_string("Anna (Anni) Maria"), "annamaria")
 
 
 def test_tagcheck():
