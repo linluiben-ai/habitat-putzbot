@@ -30,6 +30,7 @@ from config import (
     CREW_SIZE,
     CYCLE_LENGTH_WEEKS,
     META_AUSLOSUNG,
+    META_BESTAETIGUNG,
     META_FRAGE,
     RESCHEDULE_MAX_CYCLES_AHEAD,
     WEEK_STATUS_BLOCKED,
@@ -80,6 +81,27 @@ def zielwoche_bestimmen(ziel_kw, heute_kw, heute_jahr):
 def ist_platz_frei(belegung):
     """Passt noch jemand in eine Woche, die schon `belegung` Leute hat?"""
     return belegung < CREW_SIZE
+
+
+def verlauf_fuer(verlauf, member_id):
+    """Bot-Nachrichten aussortieren, die einem anderen Mitglied gelten.
+
+    Produktiv hat jedes Mitglied seinen eigenen DM-Kanal, hier fällt also nichts
+    weg. Beim Testen mit `SLACK_TEST_USER_ID` gehen dagegen ALLE DMs an dieselbe
+    Person: ohne diesen Filter wäre die neueste Bot-Nachricht im Kanal
+    womöglich die eines anderen Mitglieds, und ein einziges ❌ würde den Tausch
+    für die ganze Crew der Woche auslösen.
+
+    Nachrichten des Mitglieds selbst (die Antworten) tragen keine Metadata und
+    bleiben deshalb immer drin — genauso wie Bot-Nachrichten ohne Zuordnung,
+    damit der Anker "neueste eigene Nachricht gewinnt" nicht aufgeweicht wird.
+    """
+    return [
+        eintrag
+        for eintrag in verlauf
+        if not eintrag["ist_vom_bot"]
+        or eintrag["payload"].get("mitglied") in (None, member_id)
+    ]
 
 
 def naechster_zustand(verlauf, aktuelle_wochen):
@@ -216,7 +238,12 @@ def _umtragen(member, alte_woche, ziel_kw, ziel_jahr, week_pages, members, looku
 
     # 3. Mitglied informieren
     slack_utils.send_dm(
-        member, slack_utils.build_reschedule_ok(member, alte_woche["kw"], ziel_kw, ziel_url)
+        member,
+        slack_utils.build_reschedule_ok(member, alte_woche["kw"], ziel_kw, ziel_url),
+        metadata={
+            "event_type": META_BESTAETIGUNG,
+            "event_payload": {"kw": ziel_kw, "jahr": ziel_jahr, "mitglied": member["id"]},
+        },
     )
 
     # 4. Alte Woche ggf. wieder auffüllen
@@ -266,7 +293,7 @@ def run_poll(week_pages, members, lookup, heute_kw, heute_jahr):
             continue
 
         aktuelle = {(w["kw"], w["year"]) for w in wochen}
-        was, daten = naechster_zustand(verlauf, aktuelle)
+        was, daten = naechster_zustand(verlauf_fuer(verlauf, mid), aktuelle)
 
         if was == "absage":
             kw, jahr = daten

@@ -238,6 +238,59 @@ def test_plan_flow():
         ) = original
 
 
+def test_draw_flow():
+    print("\n=== Draw-Lauf (Übergangsmodus: eine Woche, keine DMs) ===")
+
+    writes, dms, posts = [], [], []
+    restore = _fake_slack_notion(writes, dms, {})
+    # _fake_slack_notion verschluckt die Kanalnachricht — hier wollen wir sie sehen.
+    slack_utils.post_channel = lambda text, channel=None: posts.append(text) or True
+
+    try:
+        members = [member(f"N{i}", new=True) for i in range(6)] + [member(f"A{i}") for i in range(6)]
+        lookup = {m["id"]: m for m in members}
+        lookup["FREIWILLIG"] = member("FREIWILLIG")
+
+        kw32 = {"page_id": "p32", "page_url": "u32", "kw": 32, "year": 2026,
+                "member_ids": ["FREIWILLIG"], "member_count": 1,
+                "status": "Geplant", "archiv": False}
+        week_pages = {"by_week": {(32, 2026): kw32}, "by_page_id": {"p32": kw32}}
+
+        selected = scheduler.draw_current_week(week_pages, members, lookup, 32, 2026)
+
+        check("drei Plätze aufgefüllt", len(selected), 3)
+        check("Freiwilliger wurde nicht erneut gezogen",
+              "FREIWILLIG" in [m["id"] for m in selected], False)
+        check("Woche wurde geschrieben",
+              [w for w in writes if w[0] == "update" and w[1] == "p32"] != [], True)
+        check("Woche ist jetzt voll", week_pages["by_week"][(32, 2026)]["member_count"], 4)
+
+        check("KEINE DMs verschickt", dms, [])
+        check("genau eine Kanalnachricht", len(posts), 1)
+        check("Nachricht nennt die KW", "KW 32" in posts[0], True)
+        check("Freiwillige werden getrennt gedankt", "freiwillige" in posts[0].lower(), True)
+        check("Ausgeloste werden genannt", "Ausgelost" in posts[0], True)
+        check("Link zur Seite dabei", "u32" in posts[0], True)
+
+        # KW 33 ist die erste Woche des Folgezyklus — der darf NICHT mitgeplant
+        # werden, auch wenn KW 32 die letzte Woche von Zyklus 8 ist.
+        check("kein Zyklus-Plan-Lauf nebenbei",
+              [w for w in writes if w[0] == "create"], [])
+
+        print("\n=== Draw-Lauf: gesperrte Woche ===")
+        posts.clear()
+        writes.clear()
+        # Nicht kw32 anfassen: fill_week hat den Cache-Eintrag durch ein neues
+        # Dict ersetzt, das alte Objekt hängt nirgends mehr.
+        week_pages["by_week"][(32, 2026)]["status"] = config.WEEK_STATUS_BLOCKED
+        selected = scheduler.draw_current_week(week_pages, members, lookup, 32, 2026)
+        check("nichts ausgelost", selected, [])
+        check("nichts geschrieben", writes, [])
+        check("keine Kanalnachricht", posts, [])
+    finally:
+        restore()
+
+
 def bot_msg(event_type=None, payload=None, reaktionen=(), ts="1", text=""):
     return {"ts": ts, "text": text, "ist_vom_bot": True, "event_type": event_type,
             "payload": payload or {}, "reaktionen": set(reaktionen)}
@@ -319,6 +372,35 @@ def test_reschedule_logik():
           reschedule.naechster_zustand(
               [bot_msg(None, None, [], ts="11"), user_msg("22"), frage, auslosung],
               aktuell)[0], None)
+    check("Bestätigung mit Metadata stoppt ebenfalls",
+          reschedule.naechster_zustand(
+              [bot_msg(config.META_BESTAETIGUNG, {"kw": 22, "jahr": 2027, "mitglied": "M0"},
+                       ts="11"),
+               user_msg("22"), frage, auslosung],
+              aktuell)[0], None)
+
+    print("\n=== Reschedule: DMs dem richtigen Mitglied zuordnen ===")
+    # Mit SLACK_TEST_USER_ID landen alle DMs im selben Kanal. Ohne Filter wäre
+    # die neueste Nachricht dort die eines anderen Mitglieds.
+    meins = bot_msg(config.META_AUSLOSUNG, {"kw": 5, "jahr": 2027, "mitglied": "M0"},
+                    ["x"], ts="1")
+    fremd = bot_msg(config.META_AUSLOSUNG, {"kw": 5, "jahr": 2027, "mitglied": "M9"},
+                    ["x"], ts="2")
+
+    check("fremde Bot-Nachricht wird aussortiert",
+          reschedule.verlauf_fuer([fremd, meins], "M0"), [meins])
+    check("Nachricht ohne Zuordnung bleibt (alter Bestand)",
+          reschedule.verlauf_fuer([bot_msg(None, None, [], ts="3"), meins], "M0") != [meins],
+          True)
+    check("Antworten des Mitglieds bleiben immer drin",
+          reschedule.verlauf_fuer([user_msg("22"), fremd], "M0"), [user_msg("22")])
+
+    check("fremde ❌ löst für mich nichts aus",
+          reschedule.naechster_zustand(
+              reschedule.verlauf_fuer([fremd], "M0"), aktuell)[0], None)
+    check("meine eigene ❌ greift weiterhin",
+          reschedule.naechster_zustand(
+              reschedule.verlauf_fuer([fremd, meins], "M0"), aktuell), ("absage", (5, 2027)))
 
 
 def _fake_slack_notion(writes, dms, verlauf_pro_mitglied):
@@ -403,7 +485,8 @@ def test_poll_flow():
     check("Zielwoche wurde angelegt", len(creates), 1)
     check("... als KW 40/2026", (creates[0][1], creates[0][2]), (40, 2026))
     check("... mit M0 drin", creates[0][3], ["M0"])
-    check("Bestaetigung an M0", any(d[0] == "M0" and d[1] is None for d in dms), True)
+    check("Bestaetigung an M0",
+          any(d[0] == "M0" and d[1] == config.META_BESTAETIGUNG for d in dms), True)
 
     # Nach dem Austragen ist KW 35 unterbesetzt -> es muss nachgelost werden
     nachgelost = [d for d in dms if d[1] == config.META_AUSLOSUNG]
@@ -441,6 +524,7 @@ def main():
     test_raffle()
     test_enrich()
     test_plan_flow()
+    test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
 

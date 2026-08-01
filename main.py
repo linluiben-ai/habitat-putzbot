@@ -1,11 +1,22 @@
 """Putzbot — Einstiegspunkt.
 
-Zwei Betriebsarten, beide über GitHub Actions:
+Betriebsarten:
 
     python main.py          wöchentlich (montags): Erinnerung, am Zyklusende
                             zusätzlich Planung des Folgezyklus
     python main.py poll     mehrmals täglich: schaut nach ✅/❌-Reaktionen auf
                             die Auslos-DMs und wickelt Tauschwünsche ab
+
+Dazu zwei Modi für den Umstieg von V2 auf V3, gedacht für den manuellen Aufruf:
+
+    python main.py draw     nur die laufende Woche auslosen, eine Kanal-
+                            nachricht, KEINE DMs und keine Zyklusplanung —
+                            das alte Verfahren mit der neuen Auslosungslogik
+    python main.py plan     nur den Folgezyklus planen (mit DMs und
+                            Reschedule), ohne die Wochenerinnerung
+
+`weekly` ist die Summe aus Erinnerung und — am Zyklusende — `plan`. Die beiden
+Einzelmodi gibt es, damit sich beides an verschiedenen Tagen auslösen lässt.
 
 Die eigentliche Logik liegt in den Modulen; hier wird nur orchestriert.
 """
@@ -26,7 +37,7 @@ from config import (
     check_env,
 )
 
-MODI = ("weekly", "poll")
+MODI = ("weekly", "poll", "draw", "plan")
 
 
 def _lade_daten(mit_kandidaten):
@@ -76,6 +87,17 @@ def main(argv):
         if week_pages is None:
             return 1
         reschedule.run_poll(week_pages, members, lookup, kw, year)
+        print("\n✅ Fertig.")
+        return 0
+
+    if modus in ("draw", "plan"):
+        week_pages, lookup, members = _lade_daten(mit_kandidaten=True)
+        if week_pages is None:
+            return 1
+        if modus == "draw":
+            scheduler.draw_current_week(week_pages, members, lookup, kw, year)
+        else:
+            scheduler.plan_next_cycle(week_pages, members, lookup, kw, year)
         print("\n✅ Fertig.")
         return 0
 
