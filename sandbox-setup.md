@@ -130,6 +130,29 @@ Ein Slack-Sandbox-Workspace bringt ein paar vorgefertigte User mit. Wofür sie t
 
 Kurz: nützlich als Kulisse, aber der eigentliche Reaktions-Flow läuft über dich selbst.
 
+## Testlauf über GitHub Actions
+
+Neben dem lokalen Aufruf gibt es [`sandbox_test.yml`](.github/workflows/sandbox_test.yml)
+— nur manuell startbar, mit `SANDBOX=true` und `USE_TEST_DATA=true` **fest verdrahtet**
+statt als Input. Der Workflow soll die Produktivdaten auch bei einem Fehlklick nicht
+erreichen können; wer produktiv laufen will, nimmt die anderen beiden Workflows.
+
+Praktischer Nebeneffekt: weil `config.py` im Sandbox-Modus `SLACK_TOKEN`,
+`SLACK_CHANNEL_ID`, `DS_B_ID` und `TEMPLATE_ID` ohnehin ersetzt, braucht dieser Lauf von
+den Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID` — die Mitgliederliste wird
+ausschließlich gelesen. Ein gelöschter Produktions-`SLACK_TOKEN` stört ihn nicht.
+
+Benötigte Secrets (alternativ als Repository-Variables):
+
+| Name | Zwingend | Wofür |
+|---|---|---|
+| `NOTION_TOKEN`, `DS_A_ID` | ja | Mitgliederliste lesen |
+| `SANDBOX_SLACK_TOKEN` | ja | Bot-Token der Sandbox-App (`xoxb-…`) |
+| `SANDBOX_SLACK_CHANNEL_ID` | ja | Testkanal |
+| `SANDBOX_SLACK_TEST_USER_ID` | ja | DM-Ziel im Sandbox-Workspace |
+| `TEST_DS_B_ID`, `TEST_TEMPLATE_ID` | ja | Notion-Testkopie |
+| `TEST_PUTZPLAN_RELATION_PROP` | nein | Default `Putztest` |
+
 ## Stand der Testläufe (30.07.2026)
 
 **Funktioniert** — Dry Run gegen Sandbox-Slack + Notion-Testkopie läuft komplett durch:
@@ -156,6 +179,10 @@ Testlauf mit `DEBUG=true` gezielt darauf schauen.
 - [x] Kopie der Putzplan-DB: „❌ Putzplan (NUR FÜR TESTS)", Data-Source-ID `565b71ac-7d09-82ec-8ce8-870a78528167`. Inhalte inkl. Relationen sind mitgekommen, die Historie steht also für Tests zur Verfügung.
 - [x] Zweite Relation auf der Mitgliederliste heißt **`Putztest`** → `PUTZPLAN_RELATION_PROP=Putztest`.
 - [x] Sandbox-Slack-App eingerichtet.
-- [ ] `TEST_TEMPLATE_ID` prüfen: muss zu dem Template passen, auf das `TEMPLATE_ID` produktiv zeigt (siehe [.env.example](.env.example)).
+- [x] `TEST_TEMPLATE_ID` geprüft: die Testkopie führt „Neue Putzcrew (Automation)" unter
+      `0a5b71ac-7d09-83ee-8af0-01b245383ca7`, passend zu `TEMPLATE_ID` produktiv.
 - [ ] Sandbox-Kanal-ID und Sandbox-User-ID in die `.env` eintragen.
+- [ ] **`SANDBOX_SLACK_TOKEN` und `SANDBOX_SLACK_CHANNEL_ID` in den GitHub-Secrets
+      ergänzen** — beim Testlauf am 01.08. kamen sie leer an, während die übrigen fünf
+      Werte da waren. `config.py` bricht dann korrekt ab, aber der Lauf kommt nicht los.
 - [ ] Die Tokens **nicht** in den Chat — die gehören in die `.env` bzw. in die GitHub-Secrets.

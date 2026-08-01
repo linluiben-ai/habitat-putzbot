@@ -18,14 +18,29 @@ Wer eine Stufe früher qualifiziert war, behält seinen Platz. Angestrebt werden
 
 Ausgeloste bekommen eine DM und können mit ❌ reagieren, um zu tauschen. Der Bot fragt dann nach der Wunschwoche und trägt um.
 
-## Zwei Abläufe
+## Die Abläufe
 
 | Workflow | Wann | Was |
 |---|---|---|
 | [`monday_cleanup.yml`](.github/workflows/monday_cleanup.yml) | montags 08:00 UTC | Erinnerung an die aktuelle Woche; am Zyklusende zusätzlich Planung des Folgezyklus |
 | [`poll_reactions.yml`](.github/workflows/poll_reactions.yml) | 5× täglich | schaut nach ✅/❌ auf den Auslos-DMs und wickelt Tauschwünsche ab |
+| [`sandbox_test.yml`](.github/workflows/sandbox_test.yml) | nur manuell | Testlauf gegen Sandbox-Slack und Notion-Testkopie |
 
-Beide lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
+Alle drei lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
+
+## Betriebsarten
+
+```bash
+python main.py          # wöchentlich: Erinnerung, am Zyklusende zusätzlich Planung
+python main.py poll     # nach ✅/❌-Reaktionen schauen und Tauschwünsche abwickeln
+python main.py draw     # nur die laufende Woche auslosen, eine Kanalnachricht, keine DMs
+python main.py plan     # nur den Folgezyklus planen (mit DMs), ohne Wochenerinnerung
+```
+
+`draw` und `plan` sind die beiden Hälften von `weekly`, einzeln auslösbar. Gedacht für den
+Umstieg von V2 auf V3: `draw` ist das alte Verfahren (eine Woche, eine Nachricht) auf der
+neuen Auslosungslogik, `plan` erlaubt es, die Zyklusplanung an einem anderen Tag als die
+Wochenerinnerung laufen zu lassen.
 
 ## Lokal ausführen
 

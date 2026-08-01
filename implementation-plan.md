@@ -97,9 +97,42 @@ Entscheidungslogik ist offline getestet.
 
 ## Phase 7 — End-to-End-Test im Sandbox-Workspace
 
+Läuft über `.github/workflows/sandbox_test.yml` (nur manuell, `SANDBOX=true` und
+`USE_TEST_DATA=true` fest verdrahtet statt als Input — der Workflow soll die
+Produktivdaten strukturell nicht erreichen können). Braucht von den
+Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
+
+- [x] Übergangsmodi `draw` und `plan`, damit Wochenauslosung und Zyklusplanung
+      an verschiedenen Tagen laufen können (siehe Umstiegsplan unten).
+- [x] DM-Zuordnung pro Mitglied (`reschedule.verlauf_fuer`): mit
+      `SLACK_TEST_USER_ID` landen alle DMs im selben Kanal, ohne den Filter
+      hätte ein einzelnes ❌ die ganze Wochencrew umgetragen.
 - [ ] Kompletter Durchlauf: Plan → Raffle → DM → ❌ → Nachfrage → Antwort → Umtragen → Nachlosen → Remind.
+- [ ] **Offen/blockiert:** `SANDBOX_SLACK_TOKEN` und `SANDBOX_SLACK_CHANNEL_ID`
+      fehlen in den GitHub-Secrets (die übrigen fünf Werte kommen an). Ohne die
+      bricht `config.py` ab — korrekt, aber der Testlauf kommt nicht los.
+- [ ] Prüfen, ob Slack die Message-Metadata über `conversations_history`
+      zurückgibt. `read_dm_history` gibt das bei `DEBUG=true` als Zeile
+      „N Nachrichten, M vom Bot, K mit Metadata" aus.
 - [ ] Fehlerfälle: zu wenige Kandidaten, Zielwoche voll (5 und ≥6), ungültige Antwort, Antwort auf eine gesperrte Woche, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr.
 - [ ] Prüfen, dass eine einmal verarbeitete Reaktion beim nächsten Poll nicht erneut greift.
+
+## Umstiegsplan V2 → V3 (KW 32/33, 2026)
+
+Der Wechsel passiert nicht an einem Tag, sondern in zwei Schritten — mit einer
+Ankündigung dazwischen, damit die Auslos-DMs niemanden unvorbereitet treffen.
+Beides wird **manuell** ausgelöst, die Cron-Trigger bleiben so lange aus.
+
+| Wann | Aufruf | Was passiert |
+|---|---|---|
+| Mo, KW 32 | `python main.py draw` | KW-32-Seite anlegen, mit der neuen Auslosungslogik auf 4 auffüllen, **eine** Kanalnachricht. Keine DMs, kein Reschedule. |
+| ~Mi, KW 32 | Ankündigung von Hand | Was sich mit V3 ändert (Zyklusplanung, DMs, Tausch per ❌). |
+| danach | `python main.py plan` | Zyklus 9 (KW 33–36) nach dem neuen Verfahren, **mit** DMs und Reschedule. |
+| danach | Actions wieder scharf | `monday_cleanup.yml` und `poll_reactions.yml` aktivieren. |
+
+Wichtig: KW 32 ist die **letzte Woche von Zyklus 8**, `should_plan` ist dort also
+`true`. Ein einfaches `python main.py` würde am Montag zusätzlich Zyklus 9 planen
+und DMs verschicken — deshalb am Montag zwingend `draw` und nicht `weekly`.
 
 ## Phase 8 — Cutover
 
