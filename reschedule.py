@@ -55,6 +55,20 @@ def parse_wochennummer(text):
     return None
 
 
+def kurzfassung(text, laenge=40):
+    """Antwort des Mitglieds für die Rückmeldung aufbereiten.
+
+    Wird zitiert, um zu zeigen, worauf sich die Absage bezieht — deshalb:
+    auf eine Zeile zusammenziehen, an der Grenze mit Auslassung statt hartem
+    Schnitt mitten im Wort, und Backticks entfernen, weil der Text in Slack in
+    einem Code-Span steht und ein Backtick die Formatierung zerlegen würde.
+    """
+    zusammen = " ".join((text or "").split()).replace("`", "'")
+    if len(zusammen) <= laenge:
+        return zusammen
+    return zusammen[:laenge].rstrip() + "…"
+
+
 def zielwoche_bestimmen(ziel_kw, heute_kw, heute_jahr):
     """Bloße KW-Zahl auf (kw, jahr) abbilden: das nächste Vorkommen in der Zukunft.
 
@@ -314,12 +328,12 @@ def run_poll(week_pages, members, lookup, heute_kw, heute_jahr):
                 parse_wochennummer(text), heute_kw, heute_jahr
             )
             if not ziel:
-                print(f"   ↩️ {member['name']} antwortete '{text.strip()[:30]}' — {grund}")
+                zitat = kurzfassung(text)
+                print(f"   ↩️ {member['name']} antwortete '{zitat}' — {grund}")
                 _frage_stellen(
                     member, kw, jahr, heute_kw, heute_jahr,
                     text=slack_utils.build_reschedule_fehler(
-                        member, text.strip()[:30], grund,
-                        _beispiel_kw(heute_kw, heute_jahr),
+                        member, zitat, grund, _beispiel_kw(heute_kw, heute_jahr),
                     ),
                 )
                 aktionen += 1

@@ -311,6 +311,17 @@ def test_reschedule_logik():
     check("unmögliche KW", reschedule.parse_wochennummer("99"), None)
     check("leer", reschedule.parse_wochennummer(""), None)
 
+    print("\n=== Reschedule: Antwort zitieren ===")
+    check("kurze Antwort bleibt", reschedule.kurzfassung("22"), "22")
+    check("Zeilenumbrueche werden zusammengezogen",
+          reschedule.kurzfassung("KW\n22"), "KW 22")
+    check("Backticks fliegen raus (sonst bricht der Code-Span)",
+          reschedule.kurzfassung("`22`"), "'22'")
+    lang = reschedule.kurzfassung("ich weiss es wirklich nicht so genau ehrlich gesagt")
+    check("lange Antwort wird gekuerzt", len(lang) <= 41, True)
+    check("... mit Auslassung statt hartem Schnitt", lang.endswith("…"), True)
+    check("... und nicht mitten im Wort", lang.rstrip("…").endswith(" "), False)
+
     print("\n=== Reschedule: Zielwoche bestimmen ===")
     # Stand KW 31/2026 (2026 hat 53 Wochen)
     check("spätere KW -> selbes Jahr",
