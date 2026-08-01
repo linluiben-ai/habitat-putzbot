@@ -24,6 +24,7 @@ import raffle  # noqa: E402
 import reschedule  # noqa: E402
 import scheduler  # noqa: E402
 import slack_utils  # noqa: E402
+import tagcheck  # noqa: E402
 
 TODAY = date.today()
 FAILS = []
@@ -310,6 +311,17 @@ def test_reschedule_logik():
     check("unmögliche KW", reschedule.parse_wochennummer("99"), None)
     check("leer", reschedule.parse_wochennummer(""), None)
 
+    print("\n=== Reschedule: Antwort zitieren ===")
+    check("kurze Antwort bleibt", reschedule.kurzfassung("22"), "22")
+    check("Zeilenumbrueche werden zusammengezogen",
+          reschedule.kurzfassung("KW\n22"), "KW 22")
+    check("Backticks fliegen raus (sonst bricht der Code-Span)",
+          reschedule.kurzfassung("`22`"), "'22'")
+    lang = reschedule.kurzfassung("ich weiss es wirklich nicht so genau ehrlich gesagt")
+    check("lange Antwort wird gekuerzt", len(lang) <= 41, True)
+    check("... mit Auslassung statt hartem Schnitt", lang.endswith("…"), True)
+    check("... und nicht mitten im Wort", lang.rstrip("…").endswith(" "), False)
+
     print("\n=== Reschedule: Zielwoche bestimmen ===")
     # Stand KW 31/2026 (2026 hat 53 Wochen)
     check("spätere KW -> selbes Jahr",
@@ -519,6 +531,61 @@ def test_poll_flow():
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
 
 
+def test_tagcheck():
+    print("\n=== Tag-Pruefung ===")
+
+    # (email -> user_id) bzw. Fehlercode; None heisst 'nicht gefunden'
+    antworten = {
+        "gut@das-habitat.de": "U_GUT",
+        "geraten@das-habitat.de": "U_GERATEN",
+    }
+    aufrufe = []
+
+    def fake_lookup(email):
+        aufrufe.append(email)
+        if email in antworten:
+            return antworten[email], None
+        return None, "users_not_found"
+
+    original = tagcheck._lookup
+    tagcheck._lookup = fake_lookup
+    try:
+        mitglieder = [
+            {"id": "1", "name": "Gut, Greta", "email": "gut@das-habitat.de",
+             "email_quelle": "Interne Email"},
+            {"id": "2", "name": "Geraten, Gerd", "email": "geraten@das-habitat.de",
+             "email_quelle": "abgeleitet"},
+            {"id": "3", "name": "Weg, Willi", "email": "weg@das-habitat.de",
+             "email_quelle": "abgeleitet"},
+            {"id": "4", "name": "Zadlo, ", "email": None, "email_quelle": None},
+        ]
+
+        erreichbar, fehlend = tagcheck.pruefe(mitglieder)
+
+        check("zwei erreichbar", [m["id"] for m, _ in erreichbar], ["1", "2"])
+        check("zwei nicht erreichbar", [m["id"] for m, _ in fehlend], ["3", "4"])
+        check("ohne E-Mail wird gar nicht erst nachgeschlagen",
+              "weg@das-habitat.de" in aufrufe and len(aufrufe), 3)
+        check("Grund bei fehlendem Slack-User", fehlend[0][1], "users_not_found")
+        check("Grund bei fehlender E-Mail", "keine E-Mail" in fehlend[1][1], True)
+
+        bericht = tagcheck.baue_bericht(erreichbar, fehlend)
+        check("Bericht nennt beide Zahlen",
+              "✅ 2 erreichbar" in bericht and "❌ 2 nicht erreichbar" in bericht, True)
+        check("nicht Erreichbare stehen mit Namen drin", "Zadlo" in bericht, True)
+        check("Erreichbare stehen als Erwähnung drin", "<@U_GUT>" in bericht, True)
+        check("geratene Adressen werden hervorgehoben",
+              "geraten" in bericht.lower() and "Geraten, Gerd" in bericht, True)
+
+        print("\n=== Tag-Pruefung: alles sauber ===")
+        bericht = tagcheck.baue_bericht([(mitglieder[0], "U_GUT")], [])
+        check("ohne Fehlende keine Mängelliste",
+              "keine DM" in bericht, False)
+        check("... aber die Erreichbaren trotzdem", "<@U_GUT>" in bericht, True)
+    finally:
+        tagcheck._lookup = original
+
+
 def main():
     test_cycles()
     test_raffle()
@@ -527,6 +594,7 @@ def main():
     test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
+    test_tagcheck()
 
     print("\n" + "=" * 50)
     if FAILS:

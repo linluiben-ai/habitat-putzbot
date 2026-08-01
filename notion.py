@@ -279,11 +279,16 @@ def _load_members(filter_payload):
         if not full_name:
             continue
 
-        # 'Interne Email' bevorzugen, sonst aus "Nachname, Vorname" ableiten
+        # 'Interne Email' bevorzugen, sonst aus "Nachname, Vorname" ableiten.
+        # Die Herkunft wird mitgeführt: eine abgeleitete Adresse ist eine
+        # Vermutung und die häufigste Ursache dafür, dass jemand keine DM
+        # bekommt. Der Modus `tags` wertet das aus.
         email = _prop(props, "Interne Email", "email")
+        email_quelle = "Interne Email" if email else None
         if not email and "," in full_name:
             nachname, vorname = (part.strip() for part in full_name.split(",", 1))
             email = f"{clean_string(vorname)}.{clean_string(nachname)}@{EMAIL_DOMAIN}"
+            email_quelle = "abgeleitet"
 
         eintritt = _prop(props, "Eintrittsdatum", "date") or {}
 
@@ -292,6 +297,7 @@ def _load_members(filter_payload):
                 "id": page["id"],
                 "name": full_name,
                 "email": email,
+                "email_quelle": email_quelle,
                 "eintrittsdatum": eintritt.get("start"),
                 "putzstatus": (_prop(props, "Putzstatus", "select") or {}).get("name"),
                 "putz_page_ids": _relation_ids(props, PUTZPLAN_RELATION_PROP),

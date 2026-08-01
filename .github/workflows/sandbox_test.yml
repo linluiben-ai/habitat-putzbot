@@ -70,15 +70,19 @@ jobs:
           SANDBOX: 'true'
           USE_TEST_DATA: 'true'
 
+          # Jeweils mit Fallback auf Repository-Variables: IDs sind nicht
+          # geheim und liegen deshalb gern mal im Variables-Reiter statt bei
+          # den Secrets. Ein gesetztes Secret gewinnt immer.
+          #
           # --- Sandbox-Slack ---
-          SANDBOX_SLACK_TOKEN: ${{ secrets.SANDBOX_SLACK_TOKEN }}
-          SANDBOX_SLACK_CHANNEL_ID: ${{ secrets.SANDBOX_SLACK_CHANNEL_ID }}
-          SANDBOX_SLACK_TEST_USER_ID: ${{ secrets.SANDBOX_SLACK_TEST_USER_ID }}
+          SANDBOX_SLACK_TOKEN: ${{ secrets.SANDBOX_SLACK_TOKEN || vars.SANDBOX_SLACK_TOKEN }}
+          SANDBOX_SLACK_CHANNEL_ID: ${{ secrets.SANDBOX_SLACK_CHANNEL_ID || vars.SANDBOX_SLACK_CHANNEL_ID }}
+          SANDBOX_SLACK_TEST_USER_ID: ${{ secrets.SANDBOX_SLACK_TEST_USER_ID || vars.SANDBOX_SLACK_TEST_USER_ID }}
 
           # --- Notion-Testkopie ---
-          TEST_DS_B_ID: ${{ secrets.TEST_DS_B_ID }}
-          TEST_TEMPLATE_ID: ${{ secrets.TEST_TEMPLATE_ID }}
-          TEST_PUTZPLAN_RELATION_PROP: ${{ secrets.TEST_PUTZPLAN_RELATION_PROP }}
+          TEST_DS_B_ID: ${{ secrets.TEST_DS_B_ID || vars.TEST_DS_B_ID }}
+          TEST_TEMPLATE_ID: ${{ secrets.TEST_TEMPLATE_ID || vars.TEST_TEMPLATE_ID }}
+          TEST_PUTZPLAN_RELATION_PROP: ${{ secrets.TEST_PUTZPLAN_RELATION_PROP || vars.TEST_PUTZPLAN_RELATION_PROP }}
 
           # --- nur lesend: die Mitgliederliste gibt es nur einmal ---
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}

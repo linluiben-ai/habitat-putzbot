@@ -281,8 +281,15 @@ def build_reschedule_ok(member, alte_kw, neue_kw, page_url):
 
 
 def build_reschedule_fehler(member, eingabe, grund, max_kw_hinweis, link=None):
+    """Absage auf eine Wunschwoche, verbunden mit einer erneuten Nachfrage.
+
+    Der Einstieg ist bewusst neutral: dieselbe Funktion bedient unverständliche
+    Eingaben *und* verstandene, aber unbrauchbare Wochen (voll, gesperrt, in der
+    Vergangenheit). Ein „damit kann ich nichts anfangen" wäre im zweiten Fall
+    schlicht falsch — der Bot hat die KW ja verstanden.
+    """
     text = (
-        f"Hm, mit `{eingabe}` kann ich nichts anfangen: {grund}\n\n"
+        f"Das klappt leider nicht mit `{eingabe}`: {grund}\n\n"
         f"Antworte bitte nochmal mit einer Kalenderwoche als Zahl, z.B. "
         f"`{max_kw_hinweis}`."
     )

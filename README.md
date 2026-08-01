@@ -18,14 +18,31 @@ Wer eine Stufe früher qualifiziert war, behält seinen Platz. Angestrebt werden
 
 Ausgeloste bekommen eine DM und können mit ❌ reagieren, um zu tauschen. Der Bot fragt dann nach der Wunschwoche und trägt um.
 
-## Zwei Abläufe
+## Die Abläufe
 
 | Workflow | Wann | Was |
 |---|---|---|
 | [`monday_cleanup.yml`](.github/workflows/monday_cleanup.yml) | montags 08:00 UTC | Erinnerung an die aktuelle Woche; am Zyklusende zusätzlich Planung des Folgezyklus |
 | [`poll_reactions.yml`](.github/workflows/poll_reactions.yml) | 5× täglich | schaut nach ✅/❌ auf den Auslos-DMs und wickelt Tauschwünsche ab |
+| [`sandbox_test.yml`](.github/workflows/sandbox_test.yml) | nur manuell | Testlauf gegen Sandbox-Slack und Notion-Testkopie |
+| [`check_tags.yml`](.github/workflows/check_tags.yml) | nur manuell | prüft gegen den echten Workspace, ob jedes Mitglied per E-Mail auffindbar ist |
 
-Beide lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
+Alle drei lassen sich in der Actions-Oberfläche manuell starten, inklusive Dry-Run- und Debug-Schalter.
+
+## Betriebsarten
+
+```bash
+python main.py          # wöchentlich: Erinnerung, am Zyklusende zusätzlich Planung
+python main.py poll     # nach ✅/❌-Reaktionen schauen und Tauschwünsche abwickeln
+python main.py draw     # nur die laufende Woche auslosen, eine Kanalnachricht, keine DMs
+python main.py plan     # nur den Folgezyklus planen (mit DMs), ohne Wochenerinnerung
+python main.py tags     # Diagnose: findet Slack jedes losbare Mitglied? Bericht als DM
+```
+
+`draw` und `plan` sind die beiden Hälften von `weekly`, einzeln auslösbar. Gedacht für den
+Umstieg von V2 auf V3: `draw` ist das alte Verfahren (eine Woche, eine Nachricht) auf der
+neuen Auslosungslogik, `plan` erlaubt es, die Zyklusplanung an einem anderen Tag als die
+Wochenerinnerung laufen zu lassen.
 
 ## Lokal ausführen
 
@@ -60,6 +77,8 @@ python tests.py
 
 ## Stand
 
-V3 ist gebaut: Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion. Vor dem Produktivbetrieb steht noch der End-to-End-Test im Sandbox-Workspace — die offenen Punkte dafür stehen in [sandbox-setup.md](sandbox-setup.md).
+V3 ist gebaut und im Sandbox-Workspace end-to-end getestet (01.08.2026): Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion — inklusive Umtragen, Nachlosen und dem Nachweis, dass eine einmal verarbeitete Reaktion nicht erneut greift. Einzelheiten in [sandbox-setup.md](sandbox-setup.md).
+
+Als Nächstes kommt der Umstieg auf die Produktivdaten in zwei Schritten (KW 32: altes Verfahren mit neuer Auslosung, danach der erste Zyklus nach dem neuen) — der Ablauf steht in [implementation-plan.md](implementation-plan.md).
 
 Später geplant: Umzug auf den Hetzner-Server mit Socket Mode, dann Reaktionen in Sekunden statt Stunden und darauf aufbauend Buttons statt Emoji-Reaktionen.

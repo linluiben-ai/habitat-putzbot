@@ -97,13 +97,59 @@ Entscheidungslogik ist offline getestet.
 
 ## Phase 7 — End-to-End-Test im Sandbox-Workspace
 
-- [ ] Kompletter Durchlauf: Plan → Raffle → DM → ❌ → Nachfrage → Antwort → Umtragen → Nachlosen → Remind.
-- [ ] Fehlerfälle: zu wenige Kandidaten, Zielwoche voll (5 und ≥6), ungültige Antwort, Antwort auf eine gesperrte Woche, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr.
-- [ ] Prüfen, dass eine einmal verarbeitete Reaktion beim nächsten Poll nicht erneut greift.
+Läuft über `.github/workflows/sandbox_test.yml` (nur manuell, `SANDBOX=true` und
+`USE_TEST_DATA=true` fest verdrahtet statt als Input — der Workflow soll die
+Produktivdaten strukturell nicht erreichen können). Braucht von den
+Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
+
+- [x] Übergangsmodi `draw` und `plan`, damit Wochenauslosung und Zyklusplanung
+      an verschiedenen Tagen laufen können (siehe Umstiegsplan unten).
+- [x] DM-Zuordnung pro Mitglied (`reschedule.verlauf_fuer`): mit
+      `SLACK_TEST_USER_ID` landen alle DMs im selben Kanal, ohne den Filter
+      hätte ein einzelnes ❌ die ganze Wochencrew umgetragen.
+- [x] **Kompletter Durchlauf am 01.08.2026 live bestanden:** Plan → Raffle → DM →
+      ❌ → Nachfrage → volle Zielwoche abgelehnt → gültige Antwort → Umtragen →
+      Zielwoche angelegt → Nachlosen → Bestätigung.
+- [x] **Slack liefert die Message-Metadata über `conversations_history` zurück** —
+      30 von 30 Nachrichten. Das war die letzte unverifizierte Annahme des
+      Reschedule-Flows. `read_dm_history` gibt das bei `DEBUG=true` als Zeile
+      „N Nachrichten, M vom Bot, K mit Metadata" aus.
+- [x] Zielwoche voll → Ablehnung mit Notion-Link und erneuter Nachfrage, ohne
+      dass irgendetwas umgetragen wird.
+- [x] Idempotenz: zweiter Poll direkt danach meldet „Nichts Neues."
+- [x] Der Mitglieds-Filter greift live: 16 Mitglieder lasen denselben DM-Verlauf
+      (Sandbox-Umleitung), nur der tatsächlich Betroffene löste den Tausch aus.
+- [ ] Restliche Fehlerfälle: zu wenige Kandidaten, gesperrte Zielwoche, Antwort in
+      der Vergangenheit, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr. Die Logik dazu
+      ist offline in [tests.py](tests.py) abgedeckt, live noch nicht durchgespielt.
+
+## Umstiegsplan V2 → V3 (KW 32/33, 2026)
+
+Der Wechsel passiert nicht an einem Tag, sondern in zwei Schritten — mit einer
+Ankündigung dazwischen, damit die Auslos-DMs niemanden unvorbereitet treffen.
+Beides wird **manuell** ausgelöst, die Cron-Trigger bleiben so lange aus.
+
+| Wann | Aufruf | Was passiert |
+|---|---|---|
+| Mo, KW 32 | `python main.py draw` | KW-32-Seite anlegen, mit der neuen Auslosungslogik auf 4 auffüllen, **eine** Kanalnachricht. Keine DMs, kein Reschedule. |
+| ~Mi, KW 32 | Ankündigung von Hand | Was sich mit V3 ändert (Zyklusplanung, DMs, Tausch per ❌). |
+| danach | `python main.py plan` | Zyklus 9 (KW 33–36) nach dem neuen Verfahren, **mit** DMs und Reschedule. |
+| danach | Actions wieder scharf | `monday_cleanup.yml` und `poll_reactions.yml` aktivieren. |
+
+Wichtig: KW 32 ist die **letzte Woche von Zyklus 8**, `should_plan` ist dort also
+`true`. Ein einfaches `python main.py` würde am Montag zusätzlich Zyklus 9 planen
+und DMs verschicken — deshalb am Montag zwingend `draw` und nicht `weekly`.
 
 ## Phase 8 — Cutover
 
-- [ ] Vorab einmal `DRY_RUN=true DEBUG=true` gegen den **echten** Slack-Workspace laufen lassen und die E-Mail→Slack-Zuordnung prüfen (im Sandbox lässt sich das nicht testen, weil dort alle DMs umgeleitet werden).
+- [ ] **`python main.py tags` gegen den echten Workspace** (Workflow
+      `check_tags.yml`). Prüft für jedes losbare Mitglied, ob sich die Slack-ID
+      über die E-Mail finden lässt, und schickt das Ergebnis als DM an
+      `SLACK_TEST_USER_ID`. Im Sandbox nicht testbar, weil dort die echten
+      Adressen nicht existieren. Ergebnis abarbeiten, dann `Interne Email` in
+      Notion für alle Fehlenden ausfüllen — eine abgeleitete Adresse ist geraten
+      und scheitert lautlos.
+- [ ] Vorab einmal `DRY_RUN=true DEBUG=true` gegen den **echten** Slack-Workspace laufen lassen und die fertigen Nachrichtentexte prüfen.
 - [ ] Auf echten Workspace/Kanal + echte Notion-IDs umstellen.
 - [ ] Sammelseiten „Ausgetragen" (KW 0) und „Postponed" (KW 54) in Notion löschen, jetzt wo `Putzstatus` sie ersetzt.
 - [ ] Ersten vollen Zyklus eng beobachten.

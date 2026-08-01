@@ -26,6 +26,8 @@ python main.py poll     # check for ✅/❌ reactions and handle swap requests
 python main.py draw     # transition mode: fill the CURRENT week, one channel
                         # message, no DMs, no cycle planning
 python main.py plan     # plan the next cycle only (with DMs), no reminder
+python main.py tags     # diagnostic: can every eligible member be found in
+                        # Slack by email? Report comes as a DM, writes nothing
 ```
 
 `draw` and `plan` exist for the V2→V3 changeover: `draw` is the old one-week-at-a-time
@@ -77,6 +79,7 @@ In production these come from GitHub Actions secrets. Locally, copy [.env.exampl
 | [slack_utils.py](slack_utils.py) | User lookup, sending, and all message texts. |
 | [scheduler.py](scheduler.py) | Scheduled processes (`remind_current_week`, `plan_next_cycle`) plus `fill_week`, the shared draw-write-notify step. |
 | [reschedule.py](reschedule.py) | Poll for ✅/❌ reactions and move members between weeks. |
+| [tagcheck.py](tagcheck.py) | One-off diagnostic for the cutover: does every eligible member resolve to a Slack ID? |
 
 `cycles.py` is separate from `scheduler.py` because both `raffle.py` and `scheduler.py` need week math; folding it in would create an import cycle.
 
@@ -85,6 +88,8 @@ In production these come from GitHub Actions secrets. Locally, copy [.env.exampl
 `DRY_RUN` is enforced *inside* the write functions in `notion.py`/`slack_utils.py`, so callers never check it. Any new write must respect this, or dry runs silently stop being safe.
 
 ## How the draw works
+
+Members are found in Slack **only** by email — `Interne Email` if set, otherwise derived from `Nachname, Vorname`. A derived address is a guess, and a wrong guess is silent: that person simply never gets a DM. `notion._load_members` records which of the two it was in `member["email_quelle"]`, and `python main.py tags` turns that into a report. Run it against the **real** workspace before the cutover — the sandbox cannot test it, because the real addresses do not exist there.
 
 Eligibility is filtered in the Notion query itself (`notion.MEMBER_FILTER`): active membership status, onboarding done, and `Putzstatus` either empty or `Normal`. `Ausgetragen`, `Neu`, `Priorität` and `Postponed` are all excluded. (The V2 "❓ page icon" check is gone — `Putzstatus` replaced it.)
 
