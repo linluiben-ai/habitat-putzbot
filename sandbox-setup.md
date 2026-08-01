@@ -168,10 +168,30 @@ Mitglieder gezogen, DMs umgeleitet. Poll-Modus läuft ebenfalls sauber.
 | Bot ist nicht im Sandbox-Kanal | `not_in_channel` | Im Testkanal `/invite @putzbot` ausführen. |
 | Datenfehler in der Mitgliederliste | Mitglied „Zadlo, " hat keinen Vornamen | In Notion den Vornamen ergänzen. Sonst greift zwar der Fallback (Anzeige „Zadlo"), aber die abgeleitete E-Mail `.zadlo@das-habitat.de` ist unbrauchbar — diese Person bekäme produktiv nie eine DM. |
 
-**Noch nicht verifiziert:** dass Slack die Message-Metadata über `conversations_history`
-zurückliefert. Dafür fehlen die DM-Scopes. Ist eine dokumentierte Slack-Funktion, aber es
-ist die eine Annahme, auf der der ganze Reschedule-Flow steht — also beim ersten echten
-Testlauf mit `DEBUG=true` gezielt darauf schauen.
+## Stand der Testläufe (01.08.2026) — End-to-End bestanden
+
+Der komplette Reschedule-Durchlauf ist über `sandbox_test.yml` gegen Sandbox-Slack und
+die Notion-Testkopie gelaufen:
+
+| Schritt | Ergebnis |
+|---|---|
+| `plan` scharf | KW 33–36 angelegt, je 4 Mitglieder, 2 neu + 2 alt, 16 DMs raus |
+| **Metadata-Rückweg** | **30 von 30 Nachrichten mit Metadata** — die Kernannahme hält |
+| ❌ auf eine Auslos-DM | erkannt, Nachfrage verschickt |
+| Zuordnung pro Mitglied | 16 Mitglieder lasen denselben Verlauf, nur der Betroffene reagierte |
+| Antwort „35" (volle Woche) | abgelehnt mit Notion-Link, nichts umgetragen |
+| Antwort „40" (freie Woche) | umgetragen, KW-40-Seite angelegt, KW 36 nachgelost, Bestätigung raus |
+| zweiter Poll | „Nichts Neues." — keine Doppelverarbeitung |
+| `draw` scharf | KW 31 von 2 auf 4 aufgefüllt, **eine** Kanalnachricht, **keine** DMs |
+
+Damit ist die eine Annahme bestätigt, auf der der ganze Reschedule-Flow steht: Slack
+liefert die Message-Metadata über `conversations_history` zurück. `read_dm_history` gibt
+das bei `DEBUG=true` mit aus — bei künftigen Läufen ein Blick auf diese Zeile genügt.
+
+Zwei Dinge, die dabei aufgefallen und behoben sind: die DM-Zuordnung pro Mitglied (ohne
+sie hätte ein einzelnes ❌ im Sandbox die ganze Wochencrew verschoben) und die
+Fehlermeldung bei einer vollen Zielwoche, die vorher behauptete, sie hätte die Eingabe
+nicht verstanden.
 
 ## Was ich von dir brauche, um mitzutesten
 
@@ -181,8 +201,9 @@ Testlauf mit `DEBUG=true` gezielt darauf schauen.
 - [x] Sandbox-Slack-App eingerichtet.
 - [x] `TEST_TEMPLATE_ID` geprüft: die Testkopie führt „Neue Putzcrew (Automation)" unter
       `0a5b71ac-7d09-83ee-8af0-01b245383ca7`, passend zu `TEMPLATE_ID` produktiv.
-- [ ] Sandbox-Kanal-ID und Sandbox-User-ID in die `.env` eintragen.
-- [ ] **`SANDBOX_SLACK_TOKEN` und `SANDBOX_SLACK_CHANNEL_ID` in den GitHub-Secrets
-      ergänzen** — beim Testlauf am 01.08. kamen sie leer an, während die übrigen fünf
-      Werte da waren. `config.py` bricht dann korrekt ab, aber der Lauf kommt nicht los.
+- [x] Sandbox-Kanal-ID und Sandbox-User-ID hinterlegt.
+- [x] `SANDBOX_SLACK_TOKEN` und `SANDBOX_SLACK_CHANNEL_ID` in den GitHub-Secrets.
+      Kamen anfangs leer an, obwohl sie in der Übersicht standen — GitHub lässt ein
+      Secret mit leerem Wert zu, und das sieht dort aus wie jedes andere. Neu anlegen
+      (nicht bearbeiten) hat es behoben.
 - [ ] Die Tokens **nicht** in den Chat — die gehören in die `.env` bzw. in die GitHub-Secrets.

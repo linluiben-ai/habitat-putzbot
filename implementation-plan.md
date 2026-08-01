@@ -107,15 +107,21 @@ Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
 - [x] DM-Zuordnung pro Mitglied (`reschedule.verlauf_fuer`): mit
       `SLACK_TEST_USER_ID` landen alle DMs im selben Kanal, ohne den Filter
       hätte ein einzelnes ❌ die ganze Wochencrew umgetragen.
-- [ ] Kompletter Durchlauf: Plan → Raffle → DM → ❌ → Nachfrage → Antwort → Umtragen → Nachlosen → Remind.
-- [ ] **Offen/blockiert:** `SANDBOX_SLACK_TOKEN` und `SANDBOX_SLACK_CHANNEL_ID`
-      fehlen in den GitHub-Secrets (die übrigen fünf Werte kommen an). Ohne die
-      bricht `config.py` ab — korrekt, aber der Testlauf kommt nicht los.
-- [ ] Prüfen, ob Slack die Message-Metadata über `conversations_history`
-      zurückgibt. `read_dm_history` gibt das bei `DEBUG=true` als Zeile
+- [x] **Kompletter Durchlauf am 01.08.2026 live bestanden:** Plan → Raffle → DM →
+      ❌ → Nachfrage → volle Zielwoche abgelehnt → gültige Antwort → Umtragen →
+      Zielwoche angelegt → Nachlosen → Bestätigung.
+- [x] **Slack liefert die Message-Metadata über `conversations_history` zurück** —
+      30 von 30 Nachrichten. Das war die letzte unverifizierte Annahme des
+      Reschedule-Flows. `read_dm_history` gibt das bei `DEBUG=true` als Zeile
       „N Nachrichten, M vom Bot, K mit Metadata" aus.
-- [ ] Fehlerfälle: zu wenige Kandidaten, Zielwoche voll (5 und ≥6), ungültige Antwort, Antwort auf eine gesperrte Woche, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr.
-- [ ] Prüfen, dass eine einmal verarbeitete Reaktion beim nächsten Poll nicht erneut greift.
+- [x] Zielwoche voll → Ablehnung mit Notion-Link und erneuter Nachfrage, ohne
+      dass irgendetwas umgetragen wird.
+- [x] Idempotenz: zweiter Poll direkt danach meldet „Nichts Neues."
+- [x] Der Mitglieds-Filter greift live: 16 Mitglieder lasen denselben DM-Verlauf
+      (Sandbox-Umleitung), nur der tatsächlich Betroffene löste den Tausch aus.
+- [ ] Restliche Fehlerfälle: zu wenige Kandidaten, gesperrte Zielwoche, Antwort in
+      der Vergangenheit, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr. Die Logik dazu
+      ist offline in [tests.py](tests.py) abgedeckt, live noch nicht durchgespielt.
 
 ## Umstiegsplan V2 → V3 (KW 32/33, 2026)
 

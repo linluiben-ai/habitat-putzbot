@@ -75,6 +75,8 @@ python tests.py
 
 ## Stand
 
-V3 ist gebaut: Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion. Vor dem Produktivbetrieb steht noch der End-to-End-Test im Sandbox-Workspace — die offenen Punkte dafür stehen in [sandbox-setup.md](sandbox-setup.md).
+V3 ist gebaut und im Sandbox-Workspace end-to-end getestet (01.08.2026): Mehrwochen-Planung, faire gestaffelte Auslosung, wöchentliche Erinnerung und Tausch per Reaktion — inklusive Umtragen, Nachlosen und dem Nachweis, dass eine einmal verarbeitete Reaktion nicht erneut greift. Einzelheiten in [sandbox-setup.md](sandbox-setup.md).
+
+Als Nächstes kommt der Umstieg auf die Produktivdaten in zwei Schritten (KW 32: altes Verfahren mit neuer Auslosung, danach der erste Zyklus nach dem neuen) — der Ablauf steht in [implementation-plan.md](implementation-plan.md).
 
 Später geplant: Umzug auf den Hetzner-Server mit Socket Mode, dann Reaktionen in Sekunden statt Stunden und darauf aufbauend Buttons statt Emoji-Reaktionen.
