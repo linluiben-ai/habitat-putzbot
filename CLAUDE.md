@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Putzbot" — a scheduled bot that runs the cleaning-crew ("Putzplan") lottery for a club (das-habitat.de). It reads member and cleaning-schedule data from two linked Notion data sources, draws members to fill upcoming weeks' crews, writes the result back to Notion, and notifies people via Slack. It runs unattended via GitHub Actions (`.github/workflows/monday_cleanup.yml`) on a cron (Mondays 08:00 UTC) or manually via `workflow_dispatch`.
 
+A third workflow, `.github/workflows/sandbox_test.yml`, is manual-only and has `SANDBOX=true` / `USE_TEST_DATA=true` hardcoded rather than as inputs — it must not be able to reach production data even by mistake. Because `config.py` swaps in the `SANDBOX_*`/`TEST_*` values, that run needs only `NOTION_TOKEN` and `DS_A_ID` from the production secrets (the Mitgliederliste is read-only).
+
 The year is divided into **13 cycles of 4 weeks** (cycle 1 = KW 1–4, … cycle 13 = KW 49–52; in 53-week ISO years KW 53 joins cycle 13). Every Monday the bot posts a reminder for the current week; in the **last week of a cycle** it additionally plans the whole *next* cycle — creating pages and drawing crews four weeks in advance so people can plan around it.
 
 [roadmap.md](roadmap.md) is the design doc for the full target state; [implementation-plan.md](implementation-plan.md) tracks which parts are built and records the agreed-upon decisions (candidate-pool rules, reschedule thresholds, verified Notion schemas). **Read implementation-plan.md before changing raffle or scheduling behavior** — it documents *why* the rules are what they are. The reschedule flow (Slack ✅/❌ reactions → webhook) is designed but not yet implemented; see [webhook-setup.md](webhook-setup.md).
@@ -19,8 +21,16 @@ venv/Scripts/pip install -r requirements.txt
 
 Run the bot (requires the env vars below):
 ```bash
-python main.py
+python main.py          # weekly: reminder, plus next-cycle planning at cycle end
+python main.py poll     # check for ✅/❌ reactions and handle swap requests
+python main.py draw     # transition mode: fill the CURRENT week, one channel
+                        # message, no DMs, no cycle planning
+python main.py plan     # plan the next cycle only (with DMs), no reminder
 ```
+
+`draw` and `plan` exist for the V2→V3 changeover: `draw` is the old one-week-at-a-time
+procedure running on the new raffle logic, and `plan` lets the cycle planning happen on a
+different day than the weekly reminder. `weekly` is unchanged and still does both.
 
 Run the offline test suite — no credentials or network needed, also runs in CI:
 ```bash
@@ -106,6 +116,8 @@ Two consequences worth remembering:
 - An invalid reply is answered with a *new* question carrying `META_FRAGE`, which re-anchors the scan. That is what stops the bot from replying to the same nonsense on every poll.
 
 A member is only removed from their old week once a **valid** target week is confirmed — otherwise a week could silently end up understaffed when someone declines and never answers.
+
+Every bot DM carries the member's Notion ID in its metadata payload, and `reschedule.verlauf_fuer` drops bot messages belonging to someone else before the state machine runs. In production each member has their own DM channel, so this filters nothing — but with `SLACK_TEST_USER_ID` *all* DMs land in one channel, and without it a single ❌ would move the whole crew of that week. That is also why the swap confirmation carries `META_BESTAETIGUNG`: an untagged confirmation would anchor every member's scan, not just its recipient's.
 
 ## Working notes
 

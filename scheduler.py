@@ -48,11 +48,16 @@ def cache_week(week_pages, entry):
     return entry
 
 
-def fill_week(week, members, week_pages, lookup, exclude_ids=()):
+def fill_week(week, members, week_pages, lookup, exclude_ids=(), send_dms=True):
     """Eine Woche auffüllen: auslosen, nach Notion schreiben, DMs verschicken.
 
     Gemeinsam genutzt von der Zyklusplanung und vom Nachlosen nach einem
     Tausch. Gibt (crew, page_url, selected) zurück.
+
+    `send_dms=False` schreibt die Woche, verschickt aber keine Auslos-DMs — für
+    den Übergangsmodus `draw`, der nur eine Kanalnachricht schickt. Ohne DM gibt
+    es auch keine Metadata und damit nichts, worauf der Poll-Lauf reagieren
+    könnte; genau so ist es dort gewollt.
     """
     needed = CREW_SIZE - week["member_count"]
 
@@ -94,12 +99,13 @@ def fill_week(week, members, week_pages, lookup, exclude_ids=()):
     for member in selected:
         member["extra_weeks"].append((week["kw"], week["year"]))
 
-    for member in selected:
-        slack_utils.send_dm(
-            member,
-            slack_utils.build_draw_dm(member, week["kw"], page_url),
-            metadata=slack_utils.auslosung_metadata(member, week["kw"], week["year"]),
-        )
+    if send_dms:
+        for member in selected:
+            slack_utils.send_dm(
+                member,
+                slack_utils.build_draw_dm(member, week["kw"], page_url),
+                metadata=slack_utils.auslosung_metadata(member, week["kw"], week["year"]),
+            )
 
     crew = crew_from_ids(week["member_ids"], lookup) + selected
     return crew, page_url, selected
@@ -122,6 +128,48 @@ def remind_current_week(week_pages, lookup, kw, year):
 
     crew = crew_from_ids(week["member_ids"], lookup)
     slack_utils.post_channel(slack_utils.build_reminder(kw, crew, week["page_url"]))
+
+
+def draw_current_week(week_pages, members, lookup, kw, year):
+    """Übergangsmodus: nur die laufende Woche auslosen, eine Kanalnachricht, keine DMs.
+
+    Das alte V2-Verfahren (eine Woche, eine Nachricht) mit der neuen
+    Auslosungslogik — gedacht für den Umstieg, solange Reschedule und DMs noch
+    nicht scharf sind. Der Zyklus-Plan-Lauf bleibt außen vor, auch wenn gerade
+    die letzte Zykluswoche ist.
+    """
+    print(f"\n🎲 Auslosung für KW {kw}/{year}")
+
+    week = notion.notion_lookup(kw, year, week_pages)
+
+    reason = _is_untouchable(week)
+    if reason:
+        print(f"   ⏭️ Übersprungen ({reason}).")
+        return []
+
+    if week["status"] == WEEK_STATUS_DONE:
+        print("   ⏭️ Übersprungen (bereits erledigt).")
+        return []
+
+    print(f"   Bereits eingetragen: {week['member_count']} — "
+          f"benötigt: {max(0, CREW_SIZE - week['member_count'])}")
+
+    raffle.enrich_members(members, week_pages, kw, year)
+    for line in raffle.describe_candidates(members, week):
+        debug(line.strip())
+
+    # Vor dem Auslosen einsammeln: fill_week hängt die Neuen an dieselbe Liste,
+    # danach ließe sich 'freiwillig eingetragen' nicht mehr von 'gelost' trennen.
+    bestehend = crew_from_ids(week["member_ids"], lookup)
+
+    _, page_url, selected = fill_week(
+        week, members, week_pages, lookup, send_dms=False
+    )
+
+    slack_utils.post_channel(
+        slack_utils.build_wochen_auslosung(kw, bestehend, selected, page_url)
+    )
+    return selected
 
 
 def plan_next_cycle(week_pages, members, lookup, kw, year):

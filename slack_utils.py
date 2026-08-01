@@ -152,6 +152,17 @@ def read_dm_history(member):
                 "reaktionen": reaktionen,
             }
         )
+
+    # Die eine Annahme, auf der der ganze Reschedule-Flow steht: dass Slack die
+    # Metadata über conversations_history zurückgibt. Kommt hier 0 heraus,
+    # obwohl Bot-Nachrichten dabei sind, fehlt entweder ein Scope oder die
+    # Nachrichten stammen von einer Version ohne Metadata.
+    vom_bot = sum(1 for e in verlauf if e["ist_vom_bot"])
+    mit_meta = sum(1 for e in verlauf if e["event_type"])
+    debug(
+        f"DM-Verlauf {member['name']}: {len(verlauf)} Nachrichten, "
+        f"{vom_bot} vom Bot, {mit_meta} mit Metadata."
+    )
     return verlauf
 
 
@@ -198,6 +209,34 @@ def build_draw_dm(member, kw, page_url):
             "\n\nWenn es dir nicht passt, meld dich bitte kurz im Team — "
             "das automatische Verschieben kommt noch."
         )
+    if page_url:
+        text += f"\n\n👉 <{page_url}|Zur Woche in Notion>"
+    return text
+
+
+def build_wochen_auslosung(kw, bestehend, gelost, page_url):
+    """Kanalnachricht für den Übergangsmodus `draw` — eine Woche, keine DMs.
+
+    Bewusst im Ton der alten V2-Nachricht: solange es noch keine DMs gibt, ist
+    das hier die einzige Stelle, an der jemand von seinem Einsatz erfährt.
+    """
+    text = f"🧹 *Der Putzplan für KW {kw} ist da* 🧹\n\n"
+
+    if not bestehend and not gelost:
+        text += (
+            "Für diese Woche ist noch niemand eingetragen und es konnte auch "
+            "niemand ausgelost werden. Wer mag spontan übernehmen?"
+        )
+    elif not gelost:
+        text += (
+            f"Diese Woche sind wir schon komplett — danke an die Freiwilligen: "
+            f"{mention_list(bestehend)} 💚"
+        )
+    else:
+        if bestehend:
+            text += f"Danke fürs freiwillige Eintragen: {mention_list(bestehend)} 🙏\n"
+        text += f"Ausgelost wurden: {mention_list(gelost)} 🎲"
+
     if page_url:
         text += f"\n\n👉 <{page_url}|Zur Woche in Notion>"
     return text

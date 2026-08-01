@@ -58,8 +58,12 @@ TEST_TEMPLATE_ID = os.environ.get("TEST_TEMPLATE_ID")
 # Relations-Property an; die echte bleibt unberührt. Beim Testen muss der Bot
 # die Kopie lesen, sonst sieht er die Einsätze aus den Testläufen nicht und
 # lost jedes Mal aus einem "noch nie geputzt"-Zustand.
-PUTZPLAN_RELATION_PROP = os.environ.get("PUTZPLAN_RELATION_PROP", "Putzplan")
-TEST_PUTZPLAN_RELATION_PROP = os.environ.get("TEST_PUTZPLAN_RELATION_PROP", "Putztest")
+# `or` statt eines Defaults in get(): eine gesetzte, aber leere Variable (etwa
+# ein Secret, das es in GitHub gar nicht gibt) muss wie "nicht gesetzt" wirken.
+# Sonst würde der Bot die Relation "" lesen, niemandes Putzhistorie finden und
+# klaglos so auslosen, als hätte noch nie jemand geputzt.
+PUTZPLAN_RELATION_PROP = os.environ.get("PUTZPLAN_RELATION_PROP") or "Putzplan"
+TEST_PUTZPLAN_RELATION_PROP = os.environ.get("TEST_PUTZPLAN_RELATION_PROP") or "Putztest"
 
 if USE_TEST_DATA:
     # DS_B (Putzplan) und Template MÜSSEN Kopien sein — das ist die einzige
@@ -176,6 +180,11 @@ DECLINE_REACTIONS = frozenset(
 # "welche DM gehört zu welcher Woche" keinen eigenen Speicher.
 META_AUSLOSUNG = "putzbot_auslosung"
 META_FRAGE = "putzbot_reschedule_frage"
+# Die Tausch-Bestätigung trägt selbst keine Entscheidung, braucht aber ein
+# Mitglied im Payload: mit SLACK_TEST_USER_ID landen alle DMs im selben Kanal,
+# und ohne Zuordnung würde eine Bestätigung für A auch den Verlauf von B
+# abriegeln.
+META_BESTAETIGUNG = "putzbot_reschedule_erledigt"
 
 DM_HISTORY_LIMIT = 30         # so viele Nachrichten pro DM-Verlauf ansehen
 

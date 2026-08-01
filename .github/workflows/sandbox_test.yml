@@ -1,0 +1,90 @@
+name: Putzbot Sandbox-Test
+
+# Testlauf gegen den Sandbox-Slack-Workspace und die Notion-Testkopie.
+#
+# SANDBOX und USE_TEST_DATA stehen hier fest verdrahtet und sind NICHT als
+# Input wählbar: dieser Workflow soll die Produktivdaten strukturell nicht
+# erreichen können, auch nicht bei einem Fehlklick. Der produktive Ablauf
+# läuft weiter über monday_cleanup.yml / poll_reactions.yml.
+#
+# Weil config.py im Sandbox-Modus SLACK_TOKEN, SLACK_CHANNEL_ID, DS_B_ID und
+# TEMPLATE_ID durch die SANDBOX_*- bzw. TEST_*-Werte ersetzt, braucht dieser
+# Lauf von den Produktiv-Secrets nur NOTION_TOKEN und DS_A_ID (die
+# Mitgliederliste wird ausschließlich gelesen).
+
+on:
+  workflow_dispatch:
+    inputs:
+      modus:
+        description: 'Betriebsart'
+        type: choice
+        default: 'weekly'
+        options:
+          - weekly
+          - poll
+          - draw
+          - plan
+      dry_run:
+        description: 'Dry Run — nichts in Notion/Slack schreiben'
+        type: boolean
+        default: true
+      debug:
+        description: 'Debug — ausführliche Diagnose (Poolgrößen, DM-Metadata)'
+        type: boolean
+        default: true
+      force_plan:
+        description: 'Plan-Lauf erzwingen (nur für Modus "weekly" relevant)'
+        type: boolean
+        default: false
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    # Teilt sich die Gruppe mit den Produktivworkflows: zwei gleichzeitige
+    # Läufe könnten dieselbe Reaktion doppelt bearbeiten.
+    concurrency:
+      group: putzbot-schreibzugriff
+      cancel-in-progress: false
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v5
+
+      - name: Python aufsetzen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Bibliotheken installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Tests
+        run: python tests.py
+
+      - name: Sandbox-Lauf
+        env:
+          # --- fest verdrahtet: dieser Workflow kann nur in die Sandbox ---
+          SANDBOX: 'true'
+          USE_TEST_DATA: 'true'
+
+          # --- Sandbox-Slack ---
+          SANDBOX_SLACK_TOKEN: ${{ secrets.SANDBOX_SLACK_TOKEN }}
+          SANDBOX_SLACK_CHANNEL_ID: ${{ secrets.SANDBOX_SLACK_CHANNEL_ID }}
+          SANDBOX_SLACK_TEST_USER_ID: ${{ secrets.SANDBOX_SLACK_TEST_USER_ID }}
+
+          # --- Notion-Testkopie ---
+          TEST_DS_B_ID: ${{ secrets.TEST_DS_B_ID }}
+          TEST_TEMPLATE_ID: ${{ secrets.TEST_TEMPLATE_ID }}
+          TEST_PUTZPLAN_RELATION_PROP: ${{ secrets.TEST_PUTZPLAN_RELATION_PROP }}
+
+          # --- nur lesend: die Mitgliederliste gibt es nur einmal ---
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DS_A_ID: ${{ secrets.DS_A_ID }}
+
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEBUG: ${{ inputs.debug }}
+          FORCE_PLAN: ${{ inputs.force_plan }}
+        run: python main.py ${{ inputs.modus }}
