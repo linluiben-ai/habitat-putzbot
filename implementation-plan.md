@@ -123,9 +123,21 @@ Produktiv-Secrets nur `NOTION_TOKEN` und `DS_A_ID`.
       anderen Mitglieds geprüft, es wurde nur das ❌ bearbeitet.
 - [x] Freitext-Antwort („ich würde gerne in KW 41 putzen, geht das?") und
       Unsinn-Antwort verhalten sich wie vorgesehen.
-- [ ] Restliche Fehlerfälle: zu wenige Kandidaten, gesperrte Zielwoche, Antwort in
-      der Vergangenheit, Jahreswechsel (KW 52 → KW 1), KW-53-Jahr. Die Logik dazu
-      ist offline in [tests.py](tests.py) abgedeckt, live noch nicht durchgespielt.
+- [x] **Gegen den echten Slack-Workspace** (Workflow `prod_dm_test.yml`, Notion
+      weiterhin auf der Testkopie, `DM_ONLY=true`): gesperrte Zielwoche wird mit
+      „diese Woche ist gesperrt" abgelehnt, eine Woche außerhalb der Reichweite
+      mit „mehr als 10 Zyklen im Voraus". In beiden Fällen wird nichts umgetragen
+      und erneut nachgefragt.
+- [ ] Live nicht durchgespielt: zu wenige Kandidaten, Jahreswechsel (KW 52 → KW 1),
+      KW-53-Jahr. Offline in [tests.py](tests.py) abgedeckt.
+
+### Dabei gefundene Eigenheit: „Vergangenheit" ist unerreichbar
+
+`zielwoche_bestimmen` bildet eine KW ≤ der aktuellen immer aufs **Folgejahr** ab.
+Der Abstand ist dadurch nie ≤ 0, und der Zweig „die Woche liegt schon in der
+Vergangenheit" kann nicht eintreten. Wer „20" antwortet, bekommt stattdessen
+„mehr als 10 Zyklen im Voraus" — inhaltlich richtig, aber die
+Vergangenheits-Meldung ist toter Code. Live bestätigt am 01.08.
 
 ## Umstiegsplan V2 → V3 (KW 32/33, 2026)
 
