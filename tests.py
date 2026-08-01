@@ -531,6 +531,32 @@ def test_poll_flow():
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
 
 
+def test_post_channel_schalter():
+    """Die ECHTE post_channel einmal ausführen.
+
+    Alle anderen Tests ersetzen sie durch ein Lambda — dadurch ist ein
+    fehlender Import in ihr nie aufgefallen. Genau das ist passiert: DM_ONLY
+    stand in config, war aber in slack_utils nicht importiert, und der
+    NameError fiel erst im Produktivlauf auf. Hier läuft die Funktion selbst.
+    """
+    print("\n=== post_channel: Schalter greifen ===")
+
+    check("DM_ONLY ist in slack_utils bekannt", hasattr(slack_utils, "DM_ONLY"), True)
+    check("DRY_RUN ist in slack_utils bekannt", hasattr(slack_utils, "DRY_RUN"), True)
+
+    original_dry, original_dm = slack_utils.DRY_RUN, slack_utils.DM_ONLY
+    try:
+        # Kein Monkeypatching von slack: kommt die Funktion bis zum Senden,
+        # ist der Schalter wirkungslos und der Test soll scheitern.
+        slack_utils.DRY_RUN, slack_utils.DM_ONLY = True, False
+        check("DRY_RUN unterdrückt den Versand", slack_utils.post_channel("Test"), True)
+
+        slack_utils.DRY_RUN, slack_utils.DM_ONLY = False, True
+        check("DM_ONLY unterdrückt den Versand", slack_utils.post_channel("Test"), False)
+    finally:
+        slack_utils.DRY_RUN, slack_utils.DM_ONLY = original_dry, original_dm
+
+
 def test_filter_umfang():
     print("\n=== Filter: Tag-Pruefung greift weiter als der Lostopf ===")
 
@@ -643,6 +669,7 @@ def main():
     test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
+    test_post_channel_schalter()
     test_filter_umfang()
     test_clean_string()
     test_tagcheck()
