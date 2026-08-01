@@ -121,6 +121,12 @@ if SANDBOX:
 
 SLACK_ZIEL = "🧪 SANDBOX" if SANDBOX else "🔴 PRODUKTIV"
 
+# Kanal-Nachrichten komplett unterbinden, DMs weiter zulassen. Für Testläufe
+# gegen den ECHTEN Workspace: dort ist eine versehentliche Nachricht in
+# #räumen-und-ratschen der Schaden, den man nicht zurücknehmen kann. Wie DRY_RUN
+# wird das in der Sendefunktion selbst durchgesetzt, nicht beim Aufrufer.
+DM_ONLY = os.environ.get("DM_ONLY", "false").lower() == "true"
+
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 # Plan-Lauf erzwingen, auch wenn gerade nicht die letzte Woche eines Zyklus ist (zum Testen).

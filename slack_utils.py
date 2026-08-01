@@ -58,6 +58,9 @@ def mention_list(members):
 
 def post_channel(text, channel=None):
     channel = channel or SLACK_CHANNEL_ID
+    if DM_ONLY:
+        print(f"   🚫 DM_ONLY — Kanal-Nachricht an {channel} unterdrückt:\n{_indent(text)}")
+        return False
     if DRY_RUN:
         print(f"   🧪 [DRY RUN] Kanal-Nachricht an {channel}:\n{_indent(text)}")
         return True

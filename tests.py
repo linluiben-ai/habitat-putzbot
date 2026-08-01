@@ -531,6 +531,19 @@ def test_poll_flow():
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
 
 
+def test_clean_string():
+    print("\n=== Abgeleitete E-Mail-Adressen ===")
+    check("Umlaute", notion.clean_string("Müller"), "mueller")
+    check("Diakritika", notion.clean_string("Colatat"), "colatat")
+    check("Bindestriche bleiben", notion.clean_string("Heinrich-Ziegler"),
+          "heinrich-ziegler")
+    # In der Produktion aufgefallen: 'remco.van de ven@das-habitat.de'
+    check("mehrteiliger Nachname ohne Leerzeichen",
+          notion.clean_string("van de Ven"), "vandeven")
+    check("führende/anhängende Leerzeichen", notion.clean_string("  Kaufhold "),
+          "kaufhold")
+
+
 def test_tagcheck():
     print("\n=== Tag-Pruefung ===")
 
@@ -594,6 +607,7 @@ def main():
     test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
+    test_clean_string()
     test_tagcheck()
 
     print("\n" + "=" * 50)

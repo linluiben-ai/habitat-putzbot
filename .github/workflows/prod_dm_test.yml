@@ -1,0 +1,89 @@
+name: Putzbot Test mit echtem Slack (nur DMs)
+
+# Testet den Reschedule-Flow gegen den ECHTEN Slack-Workspace, ohne dass
+# jemand außer der Testperson etwas mitbekommt. Nötig, weil manche Wege sich
+# im Sandbox nicht nachstellen lassen, sobald dort niemand mehr mitliest.
+#
+# Drei Sicherungen, alle fest verdrahtet statt als Input:
+#
+#   USE_TEST_DATA=true   Notion-Schreibzugriffe treffen nur die Testkopie.
+#   DM_ONLY=true         Kanal-Nachrichten werden in der Sendefunktion selbst
+#                        unterdrückt. Eine versehentliche Nachricht in
+#                        #räumen-und-ratschen ist der Schaden, den man nicht
+#                        zurücknehmen kann.
+#   SLACK_TEST_USER_ID   ALLE DMs gehen an diese eine Person. Der Schritt
+#                        unten bricht ab, wenn der Wert fehlt — ohne ihn
+#                        würden echte Mitglieder angeschrieben.
+#
+# Trotzdem gilt: die Testkopie sollte vorher so hergerichtet sein, dass nur
+# wenige Wochen offen sind, sonst werden unnötig viele DMs erzeugt.
+
+on:
+  workflow_dispatch:
+    inputs:
+      modus:
+        description: 'Betriebsart'
+        type: choice
+        default: 'poll'
+        options:
+          - poll
+          - plan
+      dry_run:
+        description: 'Dry Run — nichts schreiben, nur anzeigen'
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: putzbot-schreibzugriff
+      cancel-in-progress: false
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v5
+
+      - name: Python aufsetzen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Bibliotheken installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Sicherheitsnetz — DM-Umleitung muss gesetzt sein
+        env:
+          SLACK_TEST_USER_ID: ${{ secrets.SLACK_TEST_USER_ID || vars.SLACK_TEST_USER_ID }}
+        run: |
+          if [ -z "$SLACK_TEST_USER_ID" ]; then
+            echo "❌ SLACK_TEST_USER_ID ist leer."
+            echo "   Dieser Workflow läuft gegen den echten Slack-Workspace."
+            echo "   Ohne Umleitung gingen die DMs an echte Mitglieder — Abbruch."
+            exit 1
+          fi
+          echo "✅ DM-Umleitung ist gesetzt."
+
+      - name: Tests
+        run: python tests.py
+
+      - name: Testlauf
+        env:
+          USE_TEST_DATA: 'true'
+          DM_ONLY: 'true'
+          SLACK_TEST_USER_ID: ${{ secrets.SLACK_TEST_USER_ID || vars.SLACK_TEST_USER_ID }}
+
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          DS_A_ID: ${{ secrets.DS_A_ID }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          TEST_DS_B_ID: ${{ secrets.TEST_DS_B_ID || vars.TEST_DS_B_ID }}
+          TEST_TEMPLATE_ID: ${{ secrets.TEST_TEMPLATE_ID || vars.TEST_TEMPLATE_ID }}
+          TEST_PUTZPLAN_RELATION_PROP: ${{ secrets.TEST_PUTZPLAN_RELATION_PROP || vars.TEST_PUTZPLAN_RELATION_PROP }}
+
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEBUG: 'true'
+        run: python main.py ${{ inputs.modus }}
