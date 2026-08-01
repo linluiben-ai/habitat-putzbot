@@ -26,6 +26,8 @@ Per **App-Manifest**, nicht Klick für Klick:
 
 Die Scopes stehen alle im Manifest, inklusive derer für Phase 5/6 (`reactions:read`, `im:history`) — die schaden jetzt nicht und ersparen später eine Neuinstallation der App.
 
+⚠️ **`reactions:write` kam später dazu** (der Bot setzt ✅/❌ auf seiner Auslos-DM selbst vor). Wer die App vorher installiert hat, muss sie **neu installieren**, sonst scheitert das Vorsetzen mit `missing_scope`. Die DM geht trotzdem raus — nur eben ohne Vorlage.
+
 **Slack CLI lohnt sich hier nicht.** Die ist auf Deno-basierte Workflow-Apps ausgelegt; für einen klassischen Bot mit Token käme man über Umwege zum selben Ergebnis. Das Manifest bringt den eigentlichen Vorteil (reproduzierbar, alle Scopes auf einmal) ganz ohne Installation.
 
 ## Schritt 2: Das E-Mail-Problem

@@ -181,6 +181,13 @@ DECLINE_REACTIONS = frozenset(
     {"x", "negative_squared_cross_mark", "heavy_multiplication_x", "-1", "thumbsdown"}
 )
 
+# Diese beiden setzt der Bot auf der Auslos-DM selbst vor, damit man nur noch
+# klicken muss. Ohne Vorlage muss man erst auf die Idee kommen zu reagieren und
+# dann auch das richtige Emoji treffen — wer daneben greift, löst nichts aus und
+# hält die Sache trotzdem für erledigt.
+# Braucht den Scope `reactions:write` (siehe slack-app-manifest.yml).
+PREFILL_REACTIONS = ("white_check_mark", "x")
+
 # Slack-Message-Metadata: hängt strukturiert an der Nachricht und kommt beim
 # Lesen der Historie wieder mit zurück. Dadurch braucht die Zuordnung
 # "welche DM gehört zu welcher Woche" keinen eigenen Speicher.

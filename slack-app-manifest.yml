@@ -28,6 +28,8 @@ oauth_config:
       - users:read         # User-Liste
       - users:read.email   # E-Mail -> Slack-User-ID, Kern des Mitglieder-Mappings
       - reactions:read     # ✅/❌ auf DMs erkennen (Phase 5/6)
+      - reactions:write    # ✅/❌ auf der eigenen Auslos-DM vorsetzen, damit das
+                           # Mitglied nur noch klicken muss
 
 settings:
   org_deploy_enabled: false

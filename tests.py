@@ -186,7 +186,7 @@ def test_plan_flow():
     )
     slack_utils.get_slack_user_id = lambda email: f"U{email.split('@')[0].upper()}" if email else None
     slack_utils.post_channel = lambda text, channel=None: True
-    slack_utils.send_dm = lambda m, text, metadata=None: "123.456"
+    slack_utils.send_dm = lambda m, text, metadata=None, reaktionen=(): "123.456"
 
     try:
         members = [member(f"N{i}", new=True) for i in range(10)] + [member(f"A{i}") for i in range(10)]
@@ -434,7 +434,7 @@ def _fake_slack_notion(writes, dms, verlauf_pro_mitglied):
     )
     slack_utils.get_slack_user_id = lambda email: "U1"
     slack_utils.post_channel = lambda text, channel=None: True
-    slack_utils.send_dm = lambda m, text, metadata=None: (
+    slack_utils.send_dm = lambda m, text, metadata=None, reaktionen=(): (
         dms.append((m["id"], (metadata or {}).get("event_type"), text)) or "9.9"
     )
     slack_utils.read_dm_history = lambda m: verlauf_pro_mitglied.get(m["id"], [])
@@ -529,6 +529,94 @@ def test_poll_flow():
     writes, dms, _ = _poll_szenario([user_msg("weiss nicht"), frage, auslosung])
     check("nichts umgetragen", [w for w in writes if w[0] == "update"], [])
     check("erneute Nachfrage", dms[0][1], config.META_FRAGE)
+
+
+def test_eigene_reaktionen_filtern():
+    """Der Kern des Vorsetzens: eigene Reaktionen dürfen nicht als Antwort zählen.
+
+    Ohne diese Trennung stünde auf JEDER Auslos-DM ein ❌ vom Bot selbst, und der
+    nächste Poll würde die komplette Crew nach einer Wunschwoche fragen.
+    """
+    print("\n=== Vorgesetzte Reaktionen von echten trennen ===")
+
+    BOT, MITGLIED = "UBOT", "UMEMBER"
+
+    def verlauf_mit(reactions):
+        original_hist = slack_utils.slack.conversations_history
+        original_dm = slack_utils.dm_channel
+        original_id = slack_utils._eigene_id.get("id", "__nicht_gesetzt__")
+        slack_utils.dm_channel = lambda m: "D1"
+        slack_utils.slack.conversations_history = lambda **kw: {
+            "messages": [{"ts": "1", "text": "Auslosung", "bot_id": "B1",
+                          "reactions": reactions}]
+        }
+        slack_utils._eigene_id["id"] = BOT
+        try:
+            return slack_utils.read_dm_history({"name": "Test", "email": "t@x.de"})
+        finally:
+            slack_utils.slack.conversations_history = original_hist
+            slack_utils.dm_channel = original_dm
+            if original_id == "__nicht_gesetzt__":
+                slack_utils._eigene_id.pop("id", None)
+            else:
+                slack_utils._eigene_id["id"] = original_id
+
+    nur_bot = verlauf_mit([{"name": "x", "users": [BOT], "count": 1},
+                           {"name": "white_check_mark", "users": [BOT], "count": 1}])
+    check("nur vorgesetzt -> keine Reaktion", nur_bot[0]["reaktionen"], set())
+    check("... und damit keine Absage", slack_utils.reaktion_auf(nur_bot[0]), None)
+
+    geklickt = verlauf_mit([{"name": "x", "users": [BOT, MITGLIED], "count": 2},
+                            {"name": "white_check_mark", "users": [BOT], "count": 1}])
+    check("Mitglied klickt ❌ -> Absage", slack_utils.reaktion_auf(geklickt[0]), "nein")
+
+    zugesagt = verlauf_mit([{"name": "x", "users": [BOT], "count": 1},
+                            {"name": "white_check_mark", "users": [BOT, MITGLIED], "count": 2}])
+    check("Mitglied klickt ✅ -> Zusage", slack_utils.reaktion_auf(zugesagt[0]), "ja")
+
+    beides = verlauf_mit([{"name": "x", "users": [BOT, MITGLIED], "count": 2},
+                          {"name": "white_check_mark", "users": [BOT, MITGLIED], "count": 2}])
+    check("beides geklickt -> Absage gewinnt", slack_utils.reaktion_auf(beides[0]), "nein")
+
+    fremd = verlauf_mit([{"name": "tada", "users": [MITGLIED], "count": 1}])
+    check("unbekanntes Emoji bleibt folgenlos", slack_utils.reaktion_auf(fremd[0]), None)
+
+
+def test_reaktionen_vorsetzen():
+    """Nur die Auslos-DM bekommt Emojis vorgesetzt — die Nachfrage nicht.
+
+    Auf die Nachfrage wird eine Zahl als Text erwartet; vorgesetzte Emojis wären
+    dort eine falsche Fährte.
+    """
+    print("\n=== Vorsetzen nur auf der Auslos-DM ===")
+
+    dms, writes = [], []
+    restore = _fake_slack_notion(writes, dms, {})
+    gesendet = []
+    slack_utils.send_dm = lambda m, text, metadata=None, reaktionen=(): (
+        gesendet.append(((metadata or {}).get("event_type"), tuple(reaktionen))) or "9.9"
+    )
+    try:
+        members = [member(f"M{i}") for i in range(6)]
+        lookup = {m["id"]: m for m in members}
+        woche = {"page_id": "p", "page_url": "u", "kw": 40, "year": 2026,
+                 "member_ids": [], "member_count": 0, "status": "Geplant",
+                 "archiv": False, "page_status": "exists"}
+        week_pages = {"by_week": {(40, 2026): woche}, "by_page_id": {"p": woche}}
+
+        scheduler.fill_week(dict(woche), members, week_pages, lookup)
+        check("Auslos-DMs verschickt", len(gesendet), 4)
+        check("... alle mit beiden Emojis vorbelegt",
+              all(r == config.PREFILL_REACTIONS for _, r in gesendet), True)
+        check("... und die Reihenfolge passt zum Text (✅ vor ❌)",
+              config.PREFILL_REACTIONS, ("white_check_mark", "x"))
+
+        gesendet.clear()
+        scheduler.fill_week(dict(woche, member_ids=[], member_count=0),
+                            members, week_pages, lookup, send_dms=False)
+        check("draw-Modus setzt nichts vor", gesendet, [])
+    finally:
+        restore()
 
 
 def test_post_channel_schalter():
@@ -669,6 +757,8 @@ def main():
     test_draw_flow()
     test_reschedule_logik()
     test_poll_flow()
+    test_eigene_reaktionen_filtern()
+    test_reaktionen_vorsetzen()
     test_post_channel_schalter()
     test_filter_umfang()
     test_clean_string()

@@ -123,6 +123,8 @@ Two consequences worth remembering:
 
 A member is only removed from their old week once a **valid** target week is confirmed — otherwise a week could silently end up understaffed when someone declines and never answers.
 
+The bot **pre-seeds ✅ and ❌ on its own draw DM** (`PREFILL_REACTIONS`, needs the `reactions:write` scope) so a member only has to click, instead of having to think of reacting and then hit the right emoji — an unrecognised emoji does nothing at all, silently. This only works because `read_dm_history` drops reactions whose only reactor is the bot itself, via `eigene_user_id()` (`auth.test`, cached). Without that filter every draw DM would look like a ❌ and the next poll would ask the whole crew to reschedule. If the bot's own ID cannot be determined, `read_dm_history` deliberately reports *no* reactions at all and says so loudly: a missed reaction is caught by the next poll, a mass false alarm is not.
+
 Every bot DM carries the member's Notion ID in its metadata payload, and `reschedule.verlauf_fuer` drops bot messages belonging to someone else before the state machine runs. In production each member has their own DM channel, so this filters nothing — but with `SLACK_TEST_USER_ID` *all* DMs land in one channel, and without it a single ❌ would move the whole crew of that week. That is also why the swap confirmation carries `META_BESTAETIGUNG`: an untagged confirmation would anchor every member's scan, not just its recipient's.
 
 ## Working notes

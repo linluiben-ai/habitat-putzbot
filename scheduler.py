@@ -6,6 +6,8 @@ import raffle
 import slack_utils
 from config import (
     CREW_SIZE,
+    PREFILL_REACTIONS,
+    RESCHEDULE_ENABLED,
     WEEK_STATUS_BLOCKED,
     WEEK_STATUS_DONE,
     WEEK_STATUS_FULL,
@@ -100,11 +102,15 @@ def fill_week(week, members, week_pages, lookup, exclude_ids=(), send_dms=True):
         member["extra_weeks"].append((week["kw"], week["year"]))
 
     if send_dms:
+        # Nur wenn Reschedule an ist: sonst steht in der DM auch keine
+        # ✅/❌-Erklärung, und vorgesetzte Emojis wären dort schlicht rätselhaft.
+        vorgabe = PREFILL_REACTIONS if RESCHEDULE_ENABLED else ()
         for member in selected:
             slack_utils.send_dm(
                 member,
                 slack_utils.build_draw_dm(member, week["kw"], page_url),
                 metadata=slack_utils.auslosung_metadata(member, week["kw"], week["year"]),
+                reaktionen=vorgabe,
             )
 
     crew = crew_from_ids(week["member_ids"], lookup) + selected

@@ -17,6 +17,24 @@ from config import (
 )
 
 _user_id_cache = {}
+_eigene_id = {}  # Dict statt Variable, damit "noch nicht geholt" von "geht nicht" trennbar bleibt
+
+
+def eigene_user_id():
+    """Die User-ID des Bots selbst. Einmal geholt, dann gecacht.
+
+    Gebraucht, um beim Lesen der Reaktionen die eigenen von denen des Mitglieds
+    zu trennen: der Bot setzt ✅/❌ auf seiner Auslos-DM vor, damit man nur noch
+    klicken muss. Ohne diese Unterscheidung läse er sein eigenes ❌ als Absage.
+    """
+    if "id" not in _eigene_id:
+        try:
+            _eigene_id["id"] = slack.auth_test()["user_id"]
+            debug(f"Eigene Bot-User-ID: {_eigene_id['id']}")
+        except (SlackApiError, KeyError) as error:
+            _eigene_id["id"] = None
+            print(f"   ⚠️ Eigene Bot-User-ID nicht ermittelbar: {error}")
+    return _eigene_id["id"]
 
 
 def get_slack_user_id(email):
@@ -87,12 +105,16 @@ def dm_channel(member):
         return None
 
 
-def send_dm(member, text, metadata=None):
+def send_dm(member, text, metadata=None, reaktionen=()):
     """DM an ein Mitglied. Gibt den Message-Timestamp zurück.
 
     `metadata` wird als Slack-Message-Metadata angehängt und kommt beim Lesen
     der Historie strukturiert zurück — so weiß der Poll-Lauf später, auf welche
     Woche sich eine Reaktion bezieht, ohne den Text parsen zu müssen.
+
+    `reaktionen` setzt der Bot direkt selbst auf die Nachricht, damit das
+    Mitglied nur noch klicken muss, statt das passende Emoji suchen zu müssen.
+    `read_dm_history` filtert sie beim Lesen wieder heraus.
     """
     if SLACK_TEST_USER_ID:
         text = f"_[Test-DM, eigentlich an {member['name']}]_\n\n{text}"
@@ -115,10 +137,20 @@ def send_dm(member, text, metadata=None):
             kwargs["metadata"] = metadata
         response = slack.chat_postMessage(**kwargs)
         debug(f"DM an {member['name']} gesendet (ts={response['ts']}).")
-        return response["ts"]
     except SlackApiError as error:
         print(f"   ❌ Slack-Fehler (DM an {member['name']}): {error.response['error']}")
         return None
+
+    # Eigener Block: scheitert das Vorsetzen (z.B. fehlender reactions:write-Scope),
+    # ist die DM trotzdem raus und gültig. Sie dann wegen der Deko zu verwerfen
+    # wäre der schlechtere Tausch — reagieren lässt sich auch ohne Vorlage.
+    for emoji in reaktionen:
+        try:
+            slack.reactions_add(channel=channel, timestamp=response["ts"], name=emoji)
+        except SlackApiError as error:
+            print(f"   ⚠️ Reaktion :{emoji}: nicht gesetzt: {error.response['error']}")
+
+    return response["ts"]
 
 
 def read_dm_history(member):
@@ -139,11 +171,24 @@ def read_dm_history(member):
         debug(f"conversations_history für {member['name']}: {error.response['error']}")
         return []
 
+    # Der Bot setzt ✅/❌ auf seiner Auslos-DM selbst vor. Ohne diese ID könnte er
+    # eigene nicht von fremden Reaktionen trennen und läse sein eigenes ❌ als
+    # Absage — und zwar bei JEDEM Mitglied. Dann lieber gar keine Reaktion sehen:
+    # eine verpasste holt der nächste Poll nach, einen Massen-Fehlalarm nicht.
+    ich = eigene_user_id()
+    if ich is None:
+        print(
+            "   ⚠️ Ohne eigene Bot-User-ID lassen sich vorgesetzte Reaktionen nicht "
+            "von echten unterscheiden — dieser Lauf wertet keine Reaktionen aus."
+        )
+
     verlauf = []
     for message in response.get("messages", []):
         metadata = message.get("metadata") or {}
-        reaktionen = {
-            reaction["name"] for reaction in message.get("reactions", []) or []
+        reaktionen = set() if ich is None else {
+            reaction["name"]
+            for reaction in message.get("reactions", []) or []
+            if set(reaction.get("users") or []) - {ich}
         }
         verlauf.append(
             {
