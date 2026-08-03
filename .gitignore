@@ -12,7 +12,3 @@ __pycache__/
 
 # Environment Variablen
 .env
-
-# Tests ignorieren
-test_pm.py
-test_lostopf.py

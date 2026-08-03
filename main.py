@@ -85,6 +85,11 @@ def main(argv):
     if SLACK_TEST_USER_ID:
         print(f"📮 Alle DMs gehen umgeleitet an {SLACK_TEST_USER_ID}.")
 
+    # Auswahlwerte in Notion können umbenannt werden; die Filter hängen an den
+    # Namen. Lieber hier abbrechen als mit halbem Kandidatenpool auslosen.
+    if not notion.pruefe_filter_optionen():
+        return 1
+
     if modus == "tags":
         # Reine Diagnose: kein Wochen-Lookup nötig, kein Schreibzugriff.
         # Bewusst der weitere Filter — geprüft wird, wer prinzipiell losbar ist,

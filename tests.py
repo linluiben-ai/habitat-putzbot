@@ -673,6 +673,51 @@ def test_filter_umfang():
           "Austrittsdatum" in lostopf and "Austrittsdatum" in tags, True)
     check("Tag-Pruefung ist echt weiter gefasst", tags < lostopf, True)
 
+    print("\n=== Filter: Auswahlwerte gegen das Notion-Schema ===")
+    werte = notion._filter_auswahlwerte(notion.MEMBER_FILTER)
+    mitglied = {w for p, w in werte if p == "Mitgliedsstatus"}
+
+    # In der Produktion aufgefallen: Notion-Optionen wurden umbenannt
+    # ('Vorläufiges Mitglied' -> 'Probemitglied', 'passives Mitglied' -> 'passiv').
+    # Der Filter traf danach lautlos 34 Mitglieder weniger.
+    check("Werte werden aus dem Filter gelesen",
+          {"Vereinsmitglied", "Probemitglied", "Probemitglied (+1 Jahr)"} <= mitglied, True)
+    check("alte Namen sind raus",
+          any("Vorläufiges" in w or w == "passives Mitglied" for w in mitglied), False)
+    check("passiv wird ausgeschlossen", "passiv" in mitglied, True)
+    check("gekündigt wird ausgeschlossen", "gekündigt" in mitglied, True)
+    check("Putzstatus-Werte werden mitgelesen",
+          ("Putzstatus", "Normal") in werte, True)
+
+    # Fehlende Optionen müssen auffallen — hier gegen ein gefaktes Schema.
+    echtes_schema = {
+        "Mitgliedsstatus": {"multi_select": {"options": [
+            {"name": n} for n in ("Vereinsmitglied", "Probemitglied",
+                                  "Probemitglied (+1 Jahr)", "Jugendliches Mitglied",
+                                  "Fördermitglied", "passiv", "gekündigt")]}},
+        "Putzstatus": {"select": {"options": [{"name": n} for n in ("Normal", "Neu")]}},
+        "Onboarding: Status": {"select": {"options": [{"name": "Erledigt"}]}},
+    }
+    for prop in echtes_schema:
+        echtes_schema[prop]["type"] = "multi_select" if prop == "Mitgliedsstatus" else "select"
+
+    def pruefe_gegen(schema):
+        vorhanden = {
+            name: {o["name"] for o in p[p["type"]]["options"]}
+            for name, p in schema.items()
+        }
+        return [(prop, wert) for prop, wert in sorted(werte)
+                if prop in vorhanden and wert not in vorhanden[prop]]
+
+    check("aktuelles Schema passt zum Filter", pruefe_gegen(echtes_schema), [])
+
+    umbenannt = dict(echtes_schema)
+    umbenannt["Mitgliedsstatus"] = {
+        "type": "multi_select",
+        "multi_select": {"options": [{"name": "Vereinsmitglied"}, {"name": "Neuer Name"}]},
+    }
+    check("Umbenennung wird erkannt", len(pruefe_gegen(umbenannt)) > 0, True)
+
 
 def test_clean_string():
     print("\n=== Abgeleitete E-Mail-Adressen ===")

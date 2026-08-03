@@ -236,13 +236,18 @@ MEMBER_FILTER = {
     "and": [
         {"property": "Austrittsdatum", "date": {"is_empty": True}},
         {"property": "Onboarding: Status", "select": {"equals": "Erledigt"}},
-        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "passives Mitglied"}},
+        # Die Werte müssen exakt so heißen wie die Optionen in Notion — ein
+        # `contains` auf eine nicht existierende Option trifft lautlos nichts.
+        # Deckungsgleich mit der Notion-Ansicht „Putzen"; `pruefe_filter_optionen`
+        # schlägt Alarm, sobald hier etwas nicht mehr zum Schema passt.
+        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "passiv"}},
         {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "Fördermitglied"}},
+        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "gekündigt"}},
         {
             "or": [
                 {"property": "Mitgliedsstatus", "multi_select": {"contains": "Vereinsmitglied"}},
-                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Vorläufiges Mitglied"}},
-                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Vorläufiges Mitglied (+1 Jahr)"}},
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Probemitglied"}},
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Probemitglied (+1 Jahr)"}},
                 {"property": "Mitgliedsstatus", "multi_select": {"contains": "Jugendliches Mitglied"}},
             ]
         },
@@ -284,6 +289,71 @@ TAG_CHECK_FILTER = {
         },
     ]
 }
+
+
+def _filter_auswahlwerte(filter_payload):
+    """Alle (Property, Wert)-Paare einsammeln, die ein Filter an Auswahlfeldern prüft."""
+    treffer = set()
+
+    def durchgehen(knoten):
+        if isinstance(knoten, dict):
+            prop = knoten.get("property")
+            for typ in ("select", "multi_select"):
+                bedingung = knoten.get(typ)
+                if prop and isinstance(bedingung, dict):
+                    for schluessel in ("equals", "contains", "does_not_contain"):
+                        if schluessel in bedingung:
+                            treffer.add((prop, bedingung[schluessel]))
+            for wert in knoten.values():
+                durchgehen(wert)
+        elif isinstance(knoten, list):
+            for wert in knoten:
+                durchgehen(wert)
+
+    durchgehen(filter_payload)
+    return treffer
+
+
+def pruefe_filter_optionen():
+    """Prüfen, ob die Auswahlwerte aus den Filtern in Notion überhaupt existieren.
+
+    Notion-Filter sind an *Namen* gebunden, nicht an IDs: wird eine Option
+    umbenannt, trifft `contains` einfach nichts mehr — ohne Fehlermeldung, nur
+    mit einem stillschweigend kleineren Kandidatenpool. Genau das ist mit
+    „Vorläufiges Mitglied" → „Probemitglied" passiert. Diese Prüfung macht so
+    etwas sofort sichtbar, statt es einen Auslosungslauf lang zu verschlucken.
+    """
+    response = requests.get(f"{NOTION_API}/data_sources/{DS_A_ID}", headers=HEADERS)
+    if response.status_code != 200:
+        # Die Prüfung selbst darf den Lauf nicht aufhalten.
+        print(f"   ⚠️ Schema der Mitgliederliste nicht lesbar: {response.text}")
+        return True
+
+    vorhanden = {}
+    for name, prop in (response.json().get("properties") or {}).items():
+        typ = prop.get("type")
+        if typ in ("select", "multi_select"):
+            vorhanden[name] = {o["name"] for o in (prop[typ] or {}).get("options", [])}
+
+    fehlend = [
+        (prop, wert)
+        for prop, wert in sorted(
+            _filter_auswahlwerte(MEMBER_FILTER) | _filter_auswahlwerte(TAG_CHECK_FILTER)
+        )
+        if prop in vorhanden and wert not in vorhanden[prop]
+    ]
+
+    if not fehlend:
+        debug("Alle Auswahlwerte der Filter existieren in Notion.")
+        return True
+
+    print("❌ Der Filter nennt Auswahlwerte, die es in Notion nicht (mehr) gibt:")
+    for prop, wert in fehlend:
+        print(f"   • {prop}: '{wert}'")
+        print(f"     vorhanden: {', '.join(sorted(vorhanden[prop]))}")
+    print("   Vermutlich in Notion umbenannt. Bitte notion.py angleichen — sonst")
+    print("   lost der Bot aus einem stillschweigend zu kleinen Topf.")
+    return False
 
 
 def get_taggable_members():

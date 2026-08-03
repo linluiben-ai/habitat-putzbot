@@ -100,6 +100,8 @@ Members are found in Slack **only** by email — `Interne Email` if set, otherwi
 
 Eligibility is filtered in the Notion query itself (`notion.MEMBER_FILTER`): active membership status, onboarding done, and `Putzstatus` either empty or `Normal`. `Ausgetragen`, `Neu`, `Priorität` and `Postponed` are all excluded. (The V2 "❓ page icon" check is gone — `Putzstatus` replaced it.)
 
+⚠️ **Notion filters match option names, not IDs.** Rename an option in Notion and `contains` silently matches nothing — no error, just a quietly smaller pool. This bit once: `Vorläufiges Mitglied` → `Probemitglied` and `passives Mitglied` → `passiv` cut the pool from 63 to 30 *and* let two passive members in, without a single warning. `notion.pruefe_filter_optionen()` now runs at startup, compares every select value used in the filters against the live schema, and aborts with the actual option list if one is gone. `MEMBER_FILTER` is meant to stay in lockstep with the Notion view "Putzen"; if you change one, change the other.
+
 `raffle.select_crew` then walks a ladder of tiers from strict to loose:
 
 ```
