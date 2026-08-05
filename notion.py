@@ -255,12 +255,9 @@ MEMBER_FILTER = {
         # 'Ausgetragen'/'Neu'/'Priorität'/'Postponed' fallen hier raus.
         {
             "or": [
-                {"property": "Putzstatus", "select": {"is_empty": True}},
-                *[
-                    {"property": "Putzstatus", "select": {"equals": value}}
-                    for value in PUTZSTATUS_ELIGIBLE
-                    if value is not None
-                ],
+                {"property": "Putzstatus", "select": {"equals": value}}
+                for value in PUTZSTATUS_ELIGIBLE
+                if value is not None
             ]
         },
     ]
@@ -271,22 +268,27 @@ MEMBER_FILTER = {
 # werden soll jede:r, die/der prinzipiell einmal in den Topf kommen kann, nicht
 # nur der heutige Topf. Wer heute 'Neu' ist, ist in zwei Monaten 'Normal' — und
 # dann soll die E-Mail schon stimmen, statt dass es beim ersten Einsatz auffällt.
-#
-# Einzige Einschränkung, die bleibt: ausgetretene Mitglieder. Die werden nie
-# wieder gelost, sie hier zu melden wäre Rauschen, das niemand je abarbeitet.
 TAG_CHECK_FILTER = {
     "and": [
         {"property": "Austrittsdatum", "date": {"is_empty": True}},
+        {"property": "Onboarding: Status", "select": {"equals": "Erledigt"}},
+        # Die Werte müssen exakt so heißen wie die Optionen in Notion — ein
+        # `contains` auf eine nicht existierende Option trifft lautlos nichts.
+        # Deckungsgleich mit der Notion-Ansicht „Putzen"; `pruefe_filter_optionen`
+        # schlägt Alarm, sobald hier etwas nicht mehr zum Schema passt.
+        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "passiv"}},
+        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "Fördermitglied"}},
+        {"property": "Mitgliedsstatus", "multi_select": {"does_not_contain": "gekündigt"}},
         {
             "or": [
-                {"property": "Putzstatus", "select": {"is_empty": True}},
-                *[
-                    {"property": "Putzstatus", "select": {"equals": value}}
-                    for value in PUTZSTATUS_ELIGIBLE
-                    if value is not None
-                ],
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Vereinsmitglied"}},
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Probemitglied"}},
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Probemitglied (+1 Jahr)"}},
+                {"property": "Mitgliedsstatus", "multi_select": {"contains": "Jugendliches Mitglied"}},
             ]
         },
+        # Putzstatus: nur 'Ausgetragen' müssen wir hier rausfiltern
+        {"property": "Putzstatus", "select": {"does_not_equal": "Ausgetragen"}},
     ]
 }
 
