@@ -98,9 +98,24 @@ In production these come from GitHub Actions secrets. Locally, copy [.env.exampl
 
 Members are found in Slack **only** by email — `Interne Email` if set, otherwise derived from `Nachname, Vorname`. A derived address is a guess, and a wrong guess is silent: that person simply never gets a DM. `notion._load_members` records which of the two it was in `member["email_quelle"]`, and `python main.py tags` turns that into a report. Run it against the **real** workspace before the cutover — the sandbox cannot test it, because the real addresses do not exist there.
 
-Eligibility is filtered in the Notion query itself (`notion.MEMBER_FILTER`): active membership status, onboarding done, and `Putzstatus` either empty or `Normal`. `Ausgetragen`, `Neu`, `Priorität` and `Postponed` are all excluded. (The V2 "❓ page icon" check is gone — `Putzstatus` replaced it.)
+Eligibility is filtered in the Notion query itself (`notion.MEMBER_FILTER`): active membership status, onboarding done, and `Putzstatus` exactly `Normal` (`config.PUTZSTATUS_ELIGIBLE`). `Ausgetragen`, `Neu`, `Priorität` and `Postponed` are excluded — **and so is an empty `Putzstatus`**: empty means nobody has decided about that person yet, and undecided does not mean opted in. Whoever should take part gets `Normal`. (The V2 "❓ page icon" check is gone — `Putzstatus` replaced it.)
+
+`notion.TAG_CHECK_FILTER` is deliberately wider on that one property: it excludes only `Ausgetragen`, so `python main.py tags` also checks people who are `Neu` or have no status yet. Someone who is `Neu` today is `Normal` in two months, and by then their email should already be verified rather than failing on their first assignment. Everything else (membership, onboarding, exit date) is identical in both filters — there is a regression test for exactly that split.
 
 ⚠️ **Notion filters match option names, not IDs.** Rename an option in Notion and `contains` silently matches nothing — no error, just a quietly smaller pool. This bit once: `Vorläufiges Mitglied` → `Probemitglied` and `passives Mitglied` → `passiv` cut the pool from 63 to 30 *and* let two passive members in, without a single warning. `notion.pruefe_filter_optionen()` now runs at startup, compares every select value used in the filters against the live schema, and aborts with the actual option list if one is gone. `MEMBER_FILTER` is meant to stay in lockstep with the Notion view "Putzen"; if you change one, change the other.
+
+### People who entered themselves in Notion beforehand
+
+Volunteers are handled by four separate pieces that have to agree, so it is worth stating in one place:
+
+- They are **never drawn again**: `raffle.select_crew` starts from `blocked = set(week["member_ids"])`.
+- They **count toward the target size**: `fill_week` only draws `needed = CREW_SIZE - week["member_count"]`, so a week with four volunteers draws nobody ("Crew ist schon vollzählig").
+- They **count toward the 2-new/2-old mix** via `already_on_page`, and toward future fairness — the Notion relation feeds `putz_count` and `MIN_WEEKS_BETWEEN` like any other assignment.
+- They **are mentioned** in reminders and summaries, because `lookup` comes from `get_all_members()` (unfiltered) rather than the eligible list — so someone with `Putzstatus: Ausgetragen` who volunteers anyway still resolves to a name.
+
+The deliberate limit: volunteers get **no DM**, and therefore **no ❌ option** — `fill_week` only messages `selected`. Someone who signed up on their own has decided, and can un-sign in Notion just as easily. Only the `draw` mode distinguishes them in its message ("Danke fürs freiwillige Eintragen" vs. "Ausgelost wurden"); the cycle summary lists everyone together.
+
+### The tier ladder
 
 `raffle.select_crew` then walks a ladder of tiers from strict to loose:
 

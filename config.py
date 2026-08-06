@@ -155,8 +155,11 @@ NEW_MEMBER_DAYS = 365         # jünger als das = "neues Mitglied"
 TARGET_NEW = 2                # Wunsch-Mischung pro Woche
 TARGET_OLD = 2
 
-# Nur diese Putzstatus-Werte dürfen gelost werden (None = Property leer).
-PUTZSTATUS_ELIGIBLE = (None, "Normal")
+# Nur diese Putzstatus-Werte dürfen gelost werden.
+# Ein LEERER Putzstatus zählt bewusst NICHT dazu: er heißt, dass über die Person
+# noch niemand entschieden hat, und wer nicht entschieden ist, gehört nicht
+# automatisch in den Topf. Wer mitmachen soll, bekommt 'Normal'.
+PUTZSTATUS_ELIGIBLE = ("Normal",)
 
 # Wochen mit diesem Status fasst der Bot nicht an.
 WEEK_STATUS_BLOCKED = "Nicht auswählen"

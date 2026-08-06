@@ -251,13 +251,15 @@ MEMBER_FILTER = {
                 {"property": "Mitgliedsstatus", "multi_select": {"contains": "Jugendliches Mitglied"}},
             ]
         },
-        # Putzstatus: nur 'Normal' oder leer sind losbar.
-        # 'Ausgetragen'/'Neu'/'Priorität'/'Postponed' fallen hier raus.
+        # Putzstatus: nur die Werte aus PUTZSTATUS_ELIGIBLE, aktuell allein
+        # 'Normal'. 'Ausgetragen'/'Neu'/'Priorität'/'Postponed' fallen raus —
+        # und ein LEERER Putzstatus ebenfalls, denn dort hat noch niemand
+        # entschieden. Kein `if value is not None` mehr: käme wieder ein None
+        # in die Liste, soll Notion laut meckern statt still weniger zu treffen.
         {
             "or": [
                 {"property": "Putzstatus", "select": {"equals": value}}
                 for value in PUTZSTATUS_ELIGIBLE
-                if value is not None
             ]
         },
     ]
@@ -293,6 +295,13 @@ TAG_CHECK_FILTER = {
 }
 
 
+# Alle Vergleichsoperatoren, die einen Auswahl-*Namen* nennen. `does_not_equal`
+# gehört unbedingt dazu: `TAG_CHECK_FILTER` schließt damit 'Ausgetragen' aus, und
+# ein ausschließender Filter auf eine umbenannte Option ist genauso still kaputt
+# wie ein einschließender — nur andersherum, dann rutschen plötzlich Leute rein.
+AUSWAHL_OPERATOREN = ("equals", "does_not_equal", "contains", "does_not_contain")
+
+
 def _filter_auswahlwerte(filter_payload):
     """Alle (Property, Wert)-Paare einsammeln, die ein Filter an Auswahlfeldern prüft."""
     treffer = set()
@@ -303,7 +312,7 @@ def _filter_auswahlwerte(filter_payload):
             for typ in ("select", "multi_select"):
                 bedingung = knoten.get(typ)
                 if prop and isinstance(bedingung, dict):
-                    for schluessel in ("equals", "contains", "does_not_contain"):
+                    for schluessel in AUSWAHL_OPERATOREN:
                         if schluessel in bedingung:
                             treffer.add((prop, bedingung[schluessel]))
             for wert in knoten.values():
