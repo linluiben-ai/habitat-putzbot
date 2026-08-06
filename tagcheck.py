@@ -67,8 +67,10 @@ def baue_bericht(erreichbar, fehlend):
     gesamt = len(erreichbar) + len(fehlend)
     text = (
         f"🔎 *Tag-Prüfung* — {gesamt} Mitglieder mit losbarem Putzstatus\n"
-        f"_(alle, die prinzipiell in den Topf kommen können — nicht nur der "
-        f"heutige Topf; ausgetretene sind draußen.)_\n\n"
+        f"_(aktive Mitglieder mit abgeschlossenem Onboarding, deren Putzstatus "
+        f"nicht „Ausgetragen\" ist — also auch „Neu\" und noch nicht gesetzte. "
+        f"Bewusst mehr als der heutige Lostopf: wer heute „Neu\" ist, ist bald "
+        f"„Normal\", und dann soll die Adresse schon stimmen.)_\n\n"
         f"✅ {len(erreichbar)} erreichbar   ❌ {len(fehlend)} nicht erreichbar\n"
     )
 

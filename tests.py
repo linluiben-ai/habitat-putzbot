@@ -664,14 +664,26 @@ def test_filter_umfang():
     lostopf = bedingungen(notion.MEMBER_FILTER)
     tags = bedingungen(notion.TAG_CHECK_FILTER)
 
-    check("Lostopf filtert auf Mitgliedsstatus", "Mitgliedsstatus" in lostopf, True)
-    check("Tag-Pruefung nicht", "Mitgliedsstatus" in tags, False)
-    check("Tag-Pruefung ignoriert das Onboarding", "Onboarding: Status" in tags, False)
-    check("beide filtern auf Putzstatus",
-          "Putzstatus" in lostopf and "Putzstatus" in tags, True)
-    check("beide lassen Ausgetretene draussen",
-          "Austrittsdatum" in lostopf and "Austrittsdatum" in tags, True)
-    check("Tag-Pruefung ist echt weiter gefasst", tags < lostopf, True)
+    # Beide grenzen auf aktive Mitglieder ein — das ist gewollt deckungsgleich.
+    for prop in ("Austrittsdatum", "Onboarding: Status", "Mitgliedsstatus", "Putzstatus"):
+        check(f"beide filtern auf {prop}", prop in lostopf and prop in tags, True)
+
+    # Der Unterschied liegt allein im Putzstatus, und darauf kommt es an:
+    # der Lostopf laesst NUR die losbaren Werte zu, die Tag-Pruefung schliesst
+    # nur 'Ausgetragen' aus. Wer heute 'Neu' ist, ist in zwei Monaten 'Normal' —
+    # dann soll die E-Mail schon geprueft sein und nicht erst beim ersten Einsatz
+    # auffallen.
+    putz_lostopf = {w for p, w in notion._filter_auswahlwerte(notion.MEMBER_FILTER)
+                    if p == "Putzstatus"}
+    putz_tags = {w for p, w in notion._filter_auswahlwerte(notion.TAG_CHECK_FILTER)
+                 if p == "Putzstatus"}
+
+    check("Lostopf laesst nur die losbaren Werte zu",
+          putz_lostopf, set(config.PUTZSTATUS_ELIGIBLE))
+    check("leerer Putzstatus ist NICHT losbar", None in config.PUTZSTATUS_ELIGIBLE, False)
+    check("Tag-Pruefung nennt nur 'Ausgetragen'", putz_tags, {"Ausgetragen"})
+    check("... und prueft damit auch 'Neu' und 'Postponed'",
+          putz_tags & {"Neu", "Postponed", "Priorität"}, set())
 
     print("\n=== Filter: Auswahlwerte gegen das Notion-Schema ===")
     werte = notion._filter_auswahlwerte(notion.MEMBER_FILTER)
@@ -688,6 +700,17 @@ def test_filter_umfang():
     check("gekündigt wird ausgeschlossen", "gekündigt" in mitglied, True)
     check("Putzstatus-Werte werden mitgelesen",
           ("Putzstatus", "Normal") in werte, True)
+
+    # Ausschliessende Operatoren muessen genauso mitgelesen werden wie
+    # einschliessende: TAG_CHECK_FILTER haengt 'Ausgetragen' an does_not_equal,
+    # und ein Ausschluss auf eine umbenannte Option ist genauso still kaputt —
+    # nur andersherum, dann rutschen ploetzlich Leute rein.
+    check("does_not_equal wird mitgelesen",
+          ("Putzstatus", "Ausgetragen")
+          in notion._filter_auswahlwerte(notion.TAG_CHECK_FILTER), True)
+    check("alle vier Operatoren sind abgedeckt",
+          set(notion.AUSWAHL_OPERATOREN),
+          {"equals", "does_not_equal", "contains", "does_not_contain"})
 
     # Fehlende Optionen müssen auffallen — hier gegen ein gefaktes Schema.
     echtes_schema = {
@@ -777,7 +800,7 @@ def test_tagcheck():
 
         bericht = tagcheck.baue_bericht(erreichbar, fehlend)
         check("Bericht sagt, dass er weiter greift als der Lostopf",
-              "prinzipiell" in bericht, True)
+              "mehr als der heutige Lostopf" in bericht, True)
         check("Bericht nennt beide Zahlen",
               "✅ 2 erreichbar" in bericht and "❌ 2 nicht erreichbar" in bericht, True)
         check("nicht Erreichbare stehen mit Namen drin", "Zadlo" in bericht, True)

@@ -10,7 +10,7 @@ Stand der Abstimmung, gilt als verbindlich für die Implementierung:
 |---|---|
 | Zyklus-Anker | Zyklus 1 = KW 1–4, … Zyklus 13 = KW 49–52. KW 53 (in manchen ISO-Jahren) zählt zu Zyklus 13, eröffnet keinen neuen. |
 | Jahres-Eindeutigkeit | Neue Property **`Jahr` (number)** in der Putzplan-DB. Bot schreibt sie beim Anlegen, alle Lookups filtern auf `Kalenderwoche` + `Jahr`. |
-| `Putzstatus` (Mitgliederliste) | Wählbar sind **nur `Normal` und leer**. `Ausgetragen`, `Neu`, `Priorität` und `Postponed` fliegen raus. (Sonderbehandlung von `Priorität`/`Postponed` evtl. später.) |
+| `Putzstatus` (Mitgliederliste) | Losbar ist **nur `Normal`**. `Ausgetragen`, `Neu`, `Priorität` und `Postponed` fliegen raus — **und leer ebenfalls** (Stand 02.08.): ein leerer Status heißt, dass über die Person noch niemand entschieden hat, und unentschieden ist kein Ja. Wer mitmachen soll, bekommt `Normal`. (Sonderbehandlung von `Priorität`/`Postponed` evtl. später.) |
 | ❓-Icon | Entfällt — wird durch `Putzstatus` ersetzt. |
 | `min_size` | Entfällt. Alles läuft über `needed` = Zielgröße (4) − bereits für die Woche eingetragene Mitglieder. |
 | Putzhäufigkeit | Gestaffelt: zuerst nur Mitglieder mit ≤1 Putzeinsatz, dann ≤2, dann ≤3. **Obergrenze 3.** |
@@ -189,6 +189,37 @@ und DMs verschicken — deshalb am Montag zwingend `draw` und nicht `weekly`.
 - [ ] Der Zuordnungsteil aus Phase 5/6 bleibt unverändert; nur die Zustellung wechselt.
 - [ ] Danach sind Buttons und Slash-Commands möglich (V3.2/V3.3, siehe [roadmap.md](roadmap.md)) — die gehen per Polling grundsätzlich nicht.
 - [ ] [webhook-setup.md](webhook-setup.md) beschreibt die HTTP-Webhook-Variante. Die ist für diesen Fall vermutlich nicht mehr nötig; das Dokument bleibt als Referenz.
+
+## Idee (nicht gebaut): erfassen, wer tatsächlich geputzt hat
+
+**Das Problem:** `putz_count` zählt **Zuteilungen, keine Erledigungen.** Wer eingetragen
+war und nicht kam, ist im System nicht von jemandem zu unterscheiden, der da war — und
+wird für die Fairness-Rechnung sogar genauso behandelt („hat ja letztens erst"). Der
+Wochenstatus `Erledigt` existiert in Notion, wird aber von nichts gesetzt; `setze_status`
+überschreibt ihn bewusst nie. Im Channel steht dazu schon eine Beschwerde („niemand hat
+abgesagt, nur ich war da").
+
+**Skizze der naheliegendsten Variante.** Der Montagslauf fragt die Crew der *vergangenen*
+Woche per DM: „Hast du geputzt?", mit vorgesetztem ✅/❌ wie bei der Auslosung. Wer ✅
+klickt, landet in einer neuen Relation `Bestätigt` auf der Wochenseite; ist die Woche
+durch, geht sie auf `Status: Erledigt`.
+
+Der Reiz daran ist, dass praktisch nichts Neues nötig wäre: Message-Metadata, vorgesetzte
+Reaktionen, der Poll-Lauf und der Mitglieds-Filter aus Phase 5–7.1 tragen das
+unverändert. Dazu kämen im Wesentlichen ein Modus, ein Metadata-Typ und eine
+Notion-Property.
+
+**Was dagegen spricht**, und weshalb es bewusst noch nicht gebaut ist:
+
+- Es bleibt **Selbstauskunft**. Wer nicht putzt, klickt eher gar nicht als ❌ — und „keine
+  Reaktion" ist nicht dasselbe wie „nicht geputzt".
+- Eine DM mehr pro Person pro Einsatz. Aufmerksamkeit ist die knappe Ressource; wenn der
+  Bot zu oft fragt, reagiert irgendwann niemand mehr — auch nicht auf das Wichtige.
+- Die ausgehängte Liste bleibt ohnehin die belastbarere Quelle. Das hier wäre eine
+  Ergänzung, kein Ersatz.
+
+Sinnvoll erst zu entscheiden, wenn der normale Ablauf ein paar Zyklen gelaufen ist und
+sich zeigt, ob das Problem in der Praxis groß genug ist.
 
 ## Priorität, falls Zeit knapp ist
 
